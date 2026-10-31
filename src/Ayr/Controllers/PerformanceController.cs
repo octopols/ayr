@@ -53,33 +53,34 @@ namespace Ayr.Controllers
             {
                 throw new ArgumentOutOfRangeException(nameof(level), level, "Only turbo, high, medium and low can be applied.");
             }
-            // The GPU overclock is removed before leaving Turbo and added only once Turbo is set. Without a usable GPU
-            // library the level still changes; there are simply no offsets to add or remove.
+            // The GPU overclock is removed before leaving Turbo and added only once Turbo is set.
             bool turbo = level == PerformanceLevel.Turbo;
             if (!turbo)
             {
-                TryApplyGpuOffsets(GpuOffsets.None);
+                ApplyGpuOffsetsIfAvailable(GpuOffsets.None);
             }
             WriteShiftByte(shift);
             if (turbo)
             {
-                TryApplyGpuOffsets(turboOffsets);
+                ApplyGpuOffsetsIfAvailable(turboOffsets);
             }
         }
 
         public void ApplyGpuOffsets(GpuOffsets offsets) => ApplyGpuOffsets(offsets.CoreMhz, offsets.MemoryMhz);
 
-        /// <summary>Returns false, and changes nothing, when GPU offsets are unavailable on this system.</summary>
-        public bool TryApplyGpuOffsets(GpuOffsets offsets)
+        public void ApplyGpuOffsets(int coreMhz, int memoryMhz)
         {
-            try
+            using (var gpu = new GpuOverclock())
             {
-                ApplyGpuOffsets(offsets);
-                return true;
+                gpu.Apply(coreMhz, memoryMhz);
             }
-            catch (GpuUnavailableException)
+        }
+
+        public GpuInfo ReadGpu()
+        {
+            using (var gpu = new GpuOverclock())
             {
-                return false;
+                return gpu.Read();
             }
         }
 
@@ -96,19 +97,15 @@ namespace Ayr.Controllers
             }
         }
 
-        public void ApplyGpuOffsets(int coreMhz, int memoryMhz)
+        private void ApplyGpuOffsetsIfAvailable(GpuOffsets offsets)
         {
-            using (var gpu = new GpuOverclock())
+            try
             {
-                gpu.Apply(coreMhz, memoryMhz);
+                ApplyGpuOffsets(offsets);
             }
-        }
-
-        public GpuInfo ReadGpu()
-        {
-            using (var gpu = new GpuOverclock())
+            catch (GpuUnavailableException)
             {
-                return gpu.Read();
+                // Without a usable GPU library there are no offsets to add or remove.
             }
         }
     }

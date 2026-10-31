@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Ayr.App;
 using Ayr.Hardware;
@@ -15,6 +16,20 @@ namespace Ayr.Controllers
         public StartupApplier(HardwareContext hardware)
         {
             _hardware = hardware;
+        }
+
+        /// <summary>Applies the saved settings; if that fails, the fans are put on Auto rather than left half-configured.</summary>
+        public void ApplyOrFailsafe()
+        {
+            try
+            {
+                Apply();
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("startup apply failed: " + ex);
+                new ModeService(_hardware).FailsafeAuto("startup apply failed");
+            }
         }
 
         /// <summary>Returns one line per action taken.</summary>

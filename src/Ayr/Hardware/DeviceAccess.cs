@@ -18,6 +18,7 @@ namespace Ayr.Hardware
         private const uint ReadControl = 0x00020000;
         private const uint OpenExisting = 3;
         private const int ErrorFileNotFound = 2;
+        private const int ErrorAccessDenied = 5;
 
         public static bool Exists(string devicePath)
         {
@@ -28,11 +29,15 @@ namespace Ayr.Hardware
                     return true;
                 }
                 int error = Marshal.GetLastWin32Error();
-                if (error == ErrorFileNotFound)
+                switch (error)
                 {
-                    return false;
+                    case ErrorFileNotFound:
+                        return false;
+                    case ErrorAccessDenied:
+                        return true;
+                    default:
+                        throw new Win32Exception(error, "Could not open " + devicePath + ".");
                 }
-                throw new Win32Exception(error, "Could not open " + devicePath + ".");
             }
         }
 

@@ -102,14 +102,22 @@ namespace Ayr.Controllers
 
         public void SetCoolerBoost(bool on)
         {
-            // Turning it on needs EC access and fails with the reason; with no EC access there is nothing to turn off.
-            byte? current = on ? ReadCoolerBoostRegister() : TryReadCoolerBoostRegister();
-            if (!current.HasValue)
+            if (on)
             {
+                SetCoolerBoostBit(ReadCoolerBoostRegister(), on: true);
                 return;
             }
-            byte wanted = on ? (byte)(current.Value | RegisterMap.CoolerBoostBit) : (byte)(current.Value & ~RegisterMap.CoolerBoostBit);
-            if (wanted != current.Value)
+            byte? current = TryReadCoolerBoostRegister();
+            if (current.HasValue)
+            {
+                SetCoolerBoostBit(current.Value, on: false);
+            }
+        }
+
+        private void SetCoolerBoostBit(byte current, bool on)
+        {
+            byte wanted = on ? (byte)(current | RegisterMap.CoolerBoostBit) : (byte)(current & ~RegisterMap.CoolerBoostBit);
+            if (wanted != current)
             {
                 _ec.WriteByte(RegisterMap.CoolerBoostRegister, wanted);
             }

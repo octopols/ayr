@@ -15,7 +15,7 @@ namespace Ayr.App
     {
         public const string TaskName = "Ayr";
         private const string TrayExecutable = "Ayr.exe";
-        public const string StartupArgument = "startup";
+        public const string SignInArgument = "startup";
 
         public bool IsInstalled => RunSchtasks("/query /tn " + TaskName) == 0;
 
@@ -69,7 +69,7 @@ namespace Ayr.App
 "    <StartWhenAvailable>true</StartWhenAvailable>\r\n" +
 "    <Priority>7</Priority>\r\n" +
 "  </Settings>\r\n" +
-"  <Actions Context=\"Author\"><Exec><Command>" + Xml(executable) + "</Command><Arguments>" + StartupArgument + "</Arguments>" +
+"  <Actions Context=\"Author\"><Exec><Command>" + Xml(executable) + "</Command><Arguments>" + SignInArgument + "</Arguments>" +
 "<WorkingDirectory>" + Xml(Path.GetDirectoryName(executable)) + "</WorkingDirectory></Exec></Actions>\r\n" +
 "</Task>\r\n";
         }

@@ -14,7 +14,7 @@ namespace Ayr.Interop
         private static readonly Guid GenericVerifyV2 = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        private struct FileInfo
+        private struct WintrustFileInfo
         {
             public uint Size;
             public string FilePath;
@@ -61,8 +61,8 @@ namespace Ayr.Interop
         /// </summary>
         public static X509Certificate2 VerifiedSigner(string path)
         {
-            var file = new FileInfo { Size = (uint)Marshal.SizeOf(typeof(FileInfo)), FilePath = path };
-            IntPtr filePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FileInfo)));
+            var file = new WintrustFileInfo { Size = (uint)Marshal.SizeOf(typeof(WintrustFileInfo)), FilePath = path };
+            IntPtr filePointer = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(WintrustFileInfo)));
             try
             {
                 Marshal.StructureToPtr(file, filePointer, false);
@@ -89,7 +89,7 @@ namespace Ayr.Interop
             }
             finally
             {
-                Marshal.DestroyStructure(filePointer, typeof(FileInfo));
+                Marshal.DestroyStructure(filePointer, typeof(WintrustFileInfo));
                 Marshal.FreeHGlobal(filePointer);
             }
         }

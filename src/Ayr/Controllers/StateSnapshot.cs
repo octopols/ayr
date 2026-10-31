@@ -65,8 +65,10 @@ namespace Ayr.Controllers
 
         private string Describe() => string.Format(CultureInfo.InvariantCulture,
             "taken={0:yyyy-MM-ddTHH:mm:ss} cpuCurve={1} vgaCurve={2} fanMode=0x{3:X2} shift=0x{4:X2} ec98={5} gpu={6}/{7}",
-            TakenAt, string.Join(",", CpuCurve), string.Join(",", VgaCurve), FanModeByte, ShiftByte, 
-            CoolerBoostRegister.HasValue ? "0x" + CoolerBoostRegister.Value.ToString("X2", CultureInfo.InvariantCulture) : "-",
-            GpuCoreOffset?.ToString(CultureInfo.InvariantCulture) ?? "-", GpuMemoryOffset?.ToString(CultureInfo.InvariantCulture) ?? "-");
+            TakenAt, string.Join(",", CpuCurve), string.Join(",", VgaCurve), FanModeByte, ShiftByte,
+            Optional(CoolerBoostRegister, "0x{0:X2}"), Optional(GpuCoreOffset, "{0}"), Optional(GpuMemoryOffset, "{0}"));
+
+        private static string Optional<T>(T? value, string format) where T : struct =>
+            value.HasValue ? string.Format(CultureInfo.InvariantCulture, format, value.Value) : "-";
     }
 }

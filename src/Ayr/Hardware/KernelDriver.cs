@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Ayr.App;
 using Ayr.Interop;
+using Microsoft.Win32;
 
 namespace Ayr.Hardware
 {
@@ -20,17 +21,18 @@ namespace Ayr.Hardware
         /// <summary>ipadtst2: sends the Apple fast-charge request to USB devices.</summary>
         public static readonly KernelDriver AppleCharge = new KernelDriver("ipadtst2", @"\\.\IpadtstSamp2", VendorLibrary.AppleChargeDriver);
 
-        private readonly string _serviceName;
         private readonly string _devicePath;
         private readonly VendorLibrary _file;
         private readonly object _startLock = new object();
 
         private KernelDriver(string serviceName, string devicePath, VendorLibrary file)
         {
-            _serviceName = serviceName;
+            ServiceName = serviceName;
             _devicePath = devicePath;
             _file = file;
         }
+
+        public string ServiceName { get; }
 
         public bool IsRunning => DeviceAccess.Exists(_devicePath);
 
@@ -38,7 +40,7 @@ namespace Ayr.Hardware
         {
             lock (_startLock)
             {
-                if (!DeviceAccess.Exists(_devicePath))
+                if (!IsRunning)
                 {
                     Start(_file.Locate());
                 }
@@ -52,79 +54,92 @@ namespace Ayr.Hardware
         /// </summary>
         public bool RemoveIfOwned()
         {
-            using (var manager = new ServiceControlHandle(Advapi32.OpenSCManager(null, null, Advapi32.ScManagerAllAccess)))
-            using (var service = new ServiceControlHandle(Advapi32.OpenService(manager.Value, _serviceName, Advapi32.ServiceAllAccess)))
+            if (!ImagePathIsOurs())
             {
-                if (service.IsInvalid || !ImagePathIsOurs())
-                {
-                    return false;
-                }
-                if (!Advapi32.DeleteService(service.Value))
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not remove the " + _serviceName + " service.");
-                }
-                ActivityLog.Write(_serviceName + " service removed; the driver unloads at the next restart");
-                return true;
+                return false;
             }
+            using (ServiceControlHandle manager = OpenServiceManager())
+            using (ServiceControlHandle service = Advapi32.OpenService(manager, ServiceName, Advapi32.ServiceAllAccess))
+            {
+                if (service.IsInvalid || !Advapi32.DeleteService(service))
+                {
+                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not remove the " + ServiceName + " service.");
+                }
+            }
+            ActivityLog.Write(ServiceName + " service removed; the driver unloads at the next restart");
+            return true;
         }
 
         private void Start(string driverPath)
         {
-            using (var manager = new ServiceControlHandle(Advapi32.OpenSCManager(null, null, Advapi32.ScManagerAllAccess)))
+            using (ServiceControlHandle manager = OpenServiceManager())
+            using (ServiceControlHandle service = OpenOrCreateService(manager, driverPath))
             {
-                if (manager.IsInvalid)
+                if (!Advapi32.StartService(service, 0, IntPtr.Zero))
                 {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not open the service manager (needs administrator rights).");
-                }
-                using (ServiceControlHandle service = RegisterService(manager, driverPath))
-                {
-                    if (!Advapi32.StartService(service.Value, 0, IntPtr.Zero))
+                    int error = Marshal.GetLastWin32Error();
+                    if (error == Advapi32.ErrorServiceMarkedForDelete)
                     {
-                        int error = Marshal.GetLastWin32Error();
-                        if (error == Advapi32.ErrorServiceMarkedForDelete)
-                        {
-                            throw new InvalidOperationException("The " + _serviceName + " driver is being removed; restart Windows, then try again.");
-                        }
-                        if (error != Advapi32.ErrorServiceAlreadyRunning)
-                        {
-                            throw new Win32Exception(error, "Could not start the " + _serviceName + " driver.");
-                        }
+                        throw new InvalidOperationException("The " + ServiceName + " driver is being removed; restart Windows, then try again.");
+                    }
+                    if (error != Advapi32.ErrorServiceAlreadyRunning)
+                    {
+                        throw new Win32Exception(error, "Could not start the " + ServiceName + " driver.");
                     }
                 }
             }
-            ActivityLog.Write(_serviceName + " driver started from " + driverPath);
+            ActivityLog.Write(ServiceName + " driver started from " + driverPath);
         }
 
-        private ServiceControlHandle RegisterService(ServiceControlHandle manager, string driverPath)
+        // An existing entry may be disabled or point at a removed MSI install, so it is pointed at Ayr's copy.
+        private ServiceControlHandle OpenOrCreateService(ServiceControlHandle manager, string driverPath)
         {
-            var service = new ServiceControlHandle(Advapi32.OpenService(manager.Value, _serviceName, Advapi32.ServiceAllAccess));
+            ServiceControlHandle service = Advapi32.OpenService(manager, ServiceName, Advapi32.ServiceAllAccess);
             if (service.IsInvalid)
             {
                 service.Dispose();
-                service = new ServiceControlHandle(Advapi32.CreateService(manager.Value, _serviceName, _serviceName, Advapi32.ServiceAllAccess,
-                    Advapi32.ServiceKernelDriver, Advapi32.ServiceDemandStart, Advapi32.ServiceErrorNormal, driverPath,
-                    null, IntPtr.Zero, null, null, null));
-                if (service.IsInvalid)
-                {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "Could not register the " + _serviceName + " driver.");
-                }
-                ActivityLog.Write(_serviceName + " service registered");
-                return service;
+                return CreateService(manager, driverPath);
             }
-            // An existing entry may be disabled or point at a removed MSI install; it is pointed at Ayr's copy instead.
-            if (!Advapi32.ChangeServiceConfig(service.Value, Advapi32.ServiceNoChange, Advapi32.ServiceDemandStart, Advapi32.ServiceNoChange,
+            if (!Advapi32.ChangeServiceConfig(service, Advapi32.ServiceNoChange, Advapi32.ServiceDemandStart, Advapi32.ServiceNoChange,
                 driverPath, null, IntPtr.Zero, null, null, null, null))
             {
                 int error = Marshal.GetLastWin32Error();
                 service.Dispose();
-                throw new Win32Exception(error, "Could not update the " + _serviceName + " service.");
+                throw new Win32Exception(error, "Could not update the " + ServiceName + " service.");
             }
             return service;
         }
 
+        private ServiceControlHandle CreateService(ServiceControlHandle manager, string driverPath)
+        {
+            ServiceControlHandle service = Advapi32.CreateService(manager, ServiceName, ServiceName, Advapi32.ServiceAllAccess,
+                Advapi32.ServiceKernelDriver, Advapi32.ServiceDemandStart, Advapi32.ServiceErrorNormal, driverPath,
+                null, IntPtr.Zero, null, null, null);
+            if (service.IsInvalid)
+            {
+                int error = Marshal.GetLastWin32Error();
+                service.Dispose();
+                throw new Win32Exception(error, "Could not register the " + ServiceName + " driver.");
+            }
+            ActivityLog.Write(ServiceName + " service registered");
+            return service;
+        }
+
+        private static ServiceControlHandle OpenServiceManager()
+        {
+            ServiceControlHandle manager = Advapi32.OpenSCManager(null, null, Advapi32.ScManagerAllAccess);
+            if (manager.IsInvalid)
+            {
+                int error = Marshal.GetLastWin32Error();
+                manager.Dispose();
+                throw new Win32Exception(error, "Could not open the service manager (needs administrator rights).");
+            }
+            return manager;
+        }
+
         private bool ImagePathIsOurs()
         {
-            using (var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + _serviceName))
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + ServiceName))
             {
                 string imagePath = key?.GetValue("ImagePath") as string;
                 return imagePath != null && imagePath.IndexOf(AppPaths.VendorDirectory, StringComparison.OrdinalIgnoreCase) >= 0;

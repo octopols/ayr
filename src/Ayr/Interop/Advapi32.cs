@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Ayr.Interop
 {
@@ -11,7 +12,6 @@ namespace Ayr.Interop
         public const uint ServiceDemandStart = 0x3;
         public const uint ServiceErrorNormal = 0x1;
         public const uint ServiceNoChange = 0xFFFFFFFF;
-        public const int ErrorServiceDoesNotExist = 1060;
         public const int ErrorServiceAlreadyRunning = 1056;
         public const int ErrorServiceMarkedForDelete = 1072;
         public const uint DaclSecurityInformation = 0x4;
@@ -19,29 +19,29 @@ namespace Ayr.Interop
         public const uint SddlRevision1 = 1;
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern IntPtr OpenSCManager(string machine, string database, uint access);
+        public static extern ServiceControlHandle OpenSCManager(string machine, string database, uint access);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern IntPtr OpenService(IntPtr manager, string name, uint access);
+        public static extern ServiceControlHandle OpenService(ServiceControlHandle manager, string name, uint access);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern IntPtr CreateService(IntPtr manager, string name, string displayName, uint access, uint serviceType,
-            uint startType, uint errorControl, string binaryPath, string loadOrderGroup, IntPtr tagId, string dependencies,
-            string account, string password);
+        public static extern ServiceControlHandle CreateService(ServiceControlHandle manager, string name, string displayName, uint access,
+            uint serviceType, uint startType, uint errorControl, string binaryPath, string loadOrderGroup, IntPtr tagId,
+            string dependencies, string account, string password);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool ChangeServiceConfig(IntPtr service, uint serviceType, uint startType, uint errorControl,
+        public static extern bool ChangeServiceConfig(ServiceControlHandle service, uint serviceType, uint startType, uint errorControl,
             string binaryPath, string loadOrderGroup, IntPtr tagId, string dependencies, string account, string password,
             string displayName);
 
         [DllImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool StartService(IntPtr service, int argumentCount, IntPtr arguments);
+        public static extern bool StartService(ServiceControlHandle service, int argumentCount, IntPtr arguments);
 
         [DllImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool DeleteService(IntPtr service);
+        public static extern bool DeleteService(ServiceControlHandle service);
 
         [DllImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -54,7 +54,6 @@ namespace Ayr.Interop
 
         [DllImport("advapi32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        public static extern bool SetKernelObjectSecurity(Microsoft.Win32.SafeHandles.SafeFileHandle handle, uint information,
-            IntPtr securityDescriptor);
+        public static extern bool SetKernelObjectSecurity(SafeFileHandle handle, uint information, IntPtr securityDescriptor);
     }
 }

@@ -1,26 +1,14 @@
-using System;
+using Microsoft.Win32.SafeHandles;
 
 namespace Ayr.Interop
 {
-    /// <summary>A service-manager or service handle, closed on dispose.</summary>
-    internal sealed class ServiceControlHandle : IDisposable
+    /// <summary>A service-manager or service handle from advapi32.</summary>
+    internal sealed class ServiceControlHandle : SafeHandleZeroOrMinusOneIsInvalid
     {
-        public ServiceControlHandle(IntPtr value)
+        private ServiceControlHandle() : base(ownsHandle: true)
         {
-            Value = value;
         }
 
-        public IntPtr Value { get; private set; }
-
-        public bool IsInvalid => Value == IntPtr.Zero;
-
-        public void Dispose()
-        {
-            if (!IsInvalid)
-            {
-                Advapi32.CloseServiceHandle(Value);
-                Value = IntPtr.Zero;
-            }
-        }
+        protected override bool ReleaseHandle() => Advapi32.CloseServiceHandle(handle);
     }
 }

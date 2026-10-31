@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using Ayr.Interop;
 
@@ -23,7 +24,7 @@ namespace Ayr.Hardware
             {
                 path = VendorLibrary.GpuControl.Locate();
             }
-            catch (Exception ex) when (ex is System.IO.IOException || ex is InvalidOperationException)
+            catch (Exception ex) when (ex is IOException || ex is InvalidOperationException)
             {
                 throw new GpuUnavailableException("GPU offsets are unavailable: " + ex.Message, ex);
             }
@@ -91,7 +92,7 @@ namespace Ayr.Hardware
             }
             if (!InitialAndGetCurrentG())
             {
-                throw new GpuUnavailableException("GPU offsets are unavailable: no NVIDIA GPU or driver answered.", null);
+                throw new GpuUnavailableException("GPU offsets are unavailable: no NVIDIA GPU or driver answered.");
             }
             _initialized = true;
         }

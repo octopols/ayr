@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
 
 namespace Ayr.Interop
 {
@@ -24,8 +26,8 @@ namespace Ayr.Interop
         public static extern IntPtr LoadLibraryEx(string path, IntPtr reserved, uint flags);
 
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern Microsoft.Win32.SafeHandles.SafeFileHandle CreateFile(string path, uint access, System.IO.FileShare share,
-            IntPtr security, uint disposition, uint flags, IntPtr template);
+        public static extern SafeFileHandle CreateFile(string path, uint access, FileShare share, IntPtr security, uint disposition,
+            uint flags, IntPtr template);
 
         [DllImport("kernel32.dll")]
         public static extern IntPtr LocalFree(IntPtr memory);

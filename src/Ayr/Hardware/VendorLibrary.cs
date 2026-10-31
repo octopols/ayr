@@ -45,11 +45,11 @@ namespace Ayr.Hardware
             _sourceProduct = sourceProduct;
         }
 
-        public string Path => System.IO.Path.Combine(AppPaths.VendorDirectory, _fileName);
+        public string VendorCopyPath => Path.Combine(AppPaths.VendorDirectory, _fileName);
 
-        public bool IsAvailable => File.Exists(Path) || File.Exists(SourcePath);
+        public bool IsAvailable => File.Exists(VendorCopyPath) || File.Exists(SourcePath);
 
-        private string SourcePath => System.IO.Path.Combine(_sourceDirectory, _fileName);
+        private string SourcePath => Path.Combine(_sourceDirectory, _fileName);
 
         /// <summary>
         /// Copies every MSI file that is installed but not yet in vendor\. Run at startup, so the files survive MSI's
@@ -59,7 +59,7 @@ namespace Ayr.Hardware
         {
             foreach (VendorLibrary library in All)
             {
-                if (File.Exists(library.Path) || !File.Exists(library.SourcePath))
+                if (File.Exists(library.VendorCopyPath) || !File.Exists(library.SourcePath))
                 {
                     continue;
                 }
@@ -77,20 +77,20 @@ namespace Ayr.Hardware
         /// <summary>Returns the verified copy in vendor\, adopting the installed MSI copy first if there is none yet.</summary>
         public string Locate()
         {
-            if (!File.Exists(Path) && File.Exists(SourcePath))
+            if (!File.Exists(VendorCopyPath) && File.Exists(SourcePath))
             {
                 Adopt();
             }
-            if (!File.Exists(Path))
+            if (!File.Exists(VendorCopyPath))
             {
                 throw new FileNotFoundException(_fileName + " was not found. Install " + _sourceProduct + " once and run Ayr so it "
-                    + "can copy the file; MSI's software can be removed afterwards.", Path);
+                    + "can copy the file; MSI's software can be removed afterwards.", VendorCopyPath);
             }
-            if (!IsTrusted(Path))
+            if (!IsTrusted(VendorCopyPath))
             {
                 throw new InvalidOperationException(_fileName + " in " + AppPaths.VendorDirectory + " is not signed by the expected publisher; it will not be used.");
             }
-            return Path;
+            return VendorCopyPath;
         }
 
         private void Adopt()
@@ -100,7 +100,7 @@ namespace Ayr.Hardware
                 throw new InvalidOperationException("MSI's " + _fileName + " failed its signature check; it was not copied.");
             }
             Directory.CreateDirectory(AppPaths.VendorDirectory);
-            File.Copy(SourcePath, Path, overwrite: false);
+            File.Copy(SourcePath, VendorCopyPath, overwrite: false);
             ActivityLog.Write("copied " + _fileName + " from " + _sourceProduct + " into vendor\\");
         }
 
