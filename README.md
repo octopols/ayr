@@ -31,7 +31,8 @@ those jobs directly, through the same firmware interfaces MSI's software uses, f
 | **GPU overclock** | Core and memory offsets in Turbo, within MSI's limits for your GPU, kept across driver resets and sleep. |
 | **Start with Windows** | Restores your settings at sign-in, the job MSI's services did at boot. |
 | **Command line** | Everything in the tray is also available as `ayrctl`, for scripts and shortcuts. |
-| **Apple fast charge** | *Experimental.* MSI Super Charger's fast-charge request for iPhones and iPads, sent once per plug-in. |
+| **Apple fast charge** | *Experimental.* MSI Super Charger's fast-charge request for iPhones and iPads, sent automatically when plugged in or by hand, with each device's state shown. |
+| **Updates** | Checks GitHub once a day and installs new versions after verifying them. Can be switched off in Settings. |
 
 <p align="center"><img src="docs/images/main.png" alt="Ayr's main window" width="420"></p>
 

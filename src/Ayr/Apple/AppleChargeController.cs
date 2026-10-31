@@ -6,8 +6,9 @@ using Ayr.App;
 namespace Ayr.Apple
 {
     /// <summary>
-    /// Apple fast charge, replacing MSI Super Charger's service: one request when an Apple device is plugged in (the
-    /// supervisor watches for that) or on demand. MSI's driver is never stopped; see AppleChargeDriver for why.
+    /// Apple fast charge, replacing MSI Super Charger's service. A request lasts until the device is unplugged, so each
+    /// connected device needs one per connection: sent automatically when that is switched on (the supervisor watches for
+    /// devices), or by hand. MSI's driver is never stopped; see AppleChargeDriver for why.
     /// </summary>
     public sealed class AppleChargeController
     {
@@ -24,42 +25,81 @@ namespace Ayr.Apple
 
         public AppleDeviceInventory Inventory { get; }
 
-        /// <summary>
-        /// Sends one request when an Apple device on a supported hub is connected and settled. MSI's driver acts on the
-        /// first Apple device it finds, so with several connected only one is reached per request.
-        /// </summary>
-        public ChargeRequestResult SendForConnected()
+        public DateTime NextRequestAllowedAt => (_requests.LastRequest ?? DateTime.MinValue) + AppleChargeDriver.MinimumGap;
+
+        public List<AppleDeviceStatus> ConnectedStatuses()
         {
-            List<AppleDevice> devices = Inventory.List(includeDisconnected: false).Where(device => AppleChargeDriver.SupportsHub(device.HubService)).ToList();
-            if (devices.Count == 0)
+            DateTime now = DateTime.Now;
+            DateTime nextAllowed = NextRequestAllowedAt;
+            return Inventory.List(includeDisconnected: false)
+                .Select(device => new AppleDeviceStatus(device, StateOf(device, now, nextAllowed)))
+                .ToList();
+        }
+
+        /// <summary>Sends one request for the connected devices; the result says why when nothing was sent.</summary>
+        public ChargeRequestResult SendForConnected() => Send(ConnectedStatuses());
+
+        /// <summary>Sends only when a connected device is waiting for its request; null when none is.</summary>
+        public ChargeRequestResult SendIfAnyReady()
+        {
+            List<AppleDeviceStatus> connected = ConnectedStatuses();
+            return connected.Any(status => status.State == FastChargeState.Ready) ? Send(connected) : null;
+        }
+
+        /// <summary>
+        /// MSI's driver acts on the first Apple device it finds, so with several connected one request reaches only one of
+        /// them; it is recorded for all, as there is no telling which.
+        /// </summary>
+        public ChargeRequestResult Send(IReadOnlyList<AppleDeviceStatus> connected)
+        {
+            List<AppleDeviceStatus> reachable = connected.Where(status => status.State != FastChargeState.UnsupportedPort).ToList();
+            if (reachable.Count == 0)
             {
-                return ChargeRequestResult.NotSent("No Apple device on a supported USB hub is connected; nothing sent.");
+                return ChargeRequestResult.NotSent("No Apple device on a supported USB port is connected.");
             }
             // MSI's driver walks the hub's device list without locking it, so nothing is sent while a device enumerates.
-            AppleDevice settling = devices.FirstOrDefault(device => device.IsSettling(SettleTime));
+            AppleDeviceStatus settling = reachable.FirstOrDefault(status => status.State == FastChargeState.Settling);
             if (settling != null)
             {
-                return ChargeRequestResult.NotSent("Not sent: " + settling.Model + " connected less than " + SettleTime.TotalSeconds + " s ago.");
+                return ChargeRequestResult.NotSent(settling.Device.Model + " was plugged in less than " + SettleTime.TotalSeconds + " s ago.");
             }
-            if (!Driver.TrySend(_requests, out string refusal))
+            if (reachable.All(status => status.State == FastChargeState.Requested))
             {
-                return ChargeRequestResult.NotSent("Not sent: " + refusal + ".");
+                return ChargeRequestResult.NotSent("Already sent while connected. Unplug the device and plug it back in to send again.");
             }
-            DateTime now = DateTime.Now;
-            foreach (AppleDevice device in devices)
+            if (!Driver.TrySend(_requests, reachable.Select(status => status.Device.InstanceId), out string refusal))
             {
-                _requests.RecordRequestFor(device.InstanceId, now);
+                return ChargeRequestResult.NotSent(Capitalize(refusal) + ".");
             }
-            string names = string.Join(", ", devices.Select(device => device.Model + " " + device.Serial));
+            string names = string.Join(", ", reachable.Select(status => status.Device.Model + " " + status.Device.Serial));
             ActivityLog.Write("apple charge request sent for " + names);
-            string severalNote = devices.Count > 1 ? " (several Apple devices connected: MSI's driver reaches only the first one)" : "";
+            string severalNote = reachable.Count > 1 ? " (several Apple devices connected: MSI's driver reaches only the first one)" : "";
             return ChargeRequestResult.Success("Fast-charge request sent: " + names + severalNote + ".");
         }
 
         public void SetAutomatic(bool on)
         {
-            DesiredState.Update(state => state.AppleFastCharge = on);
-            ActivityLog.Write("apple fast charge " + (on ? "on" : "off"));
+            DesiredState.Update(state => state.AppleAutoFastCharge = on);
+            ActivityLog.Write("automatic apple fast charge " + (on ? "on" : "off"));
         }
+
+        private static FastChargeState StateOf(AppleDevice device, DateTime now, DateTime nextAllowed)
+        {
+            if (!AppleChargeDriver.SupportsHub(device.HubService))
+            {
+                return FastChargeState.UnsupportedPort;
+            }
+            if (device.FastChargeRequested)
+            {
+                return FastChargeState.Requested;
+            }
+            if (device.IsSettling(SettleTime))
+            {
+                return FastChargeState.Settling;
+            }
+            return now < nextAllowed ? FastChargeState.WaitingForGap : FastChargeState.Ready;
+        }
+
+        private static string Capitalize(string text) => char.ToUpperInvariant(text[0]) + text.Substring(1);
     }
 }

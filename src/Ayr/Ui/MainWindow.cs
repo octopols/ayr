@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using Ayr.Apple;
+using Ayr.App;
 using Ayr.Controllers;
 using Ayr.Hardware;
 using Ayr.Ui.Controls;
+using Ayr.Updates;
 
 namespace Ayr.Ui
 {
@@ -23,6 +24,7 @@ namespace Ayr.Ui
         private const int ScreenMargin = 40;
         private const int MaxDeviceRows = 3;
         private const string MsiCenterWarning = "MSI Center is running and overrides Ayr's settings after sleep. Uninstall MSI Center.";
+        private const string CheckForUpdatesLabel = "Check for updates";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(15);
 
@@ -49,14 +51,20 @@ namespace Ayr.Ui
         private readonly LabeledSlider _coreOffset, _memoryOffset;
         private readonly FlatButton _applyOverclock;
         private readonly TitleWithSubtitle _appleTitle;
-        private readonly ToggleSwitch _appleToggle;
         private readonly Card _appleCard;
+        private readonly TitleWithSubtitle _appleAutomaticRow;
+        private readonly ToggleSwitch _appleToggle;
+        private readonly Panel _appleDivider;
+        private readonly ThemedToolTip _toolTip;
         private readonly List<DeviceRow> _deviceRows = new List<DeviceRow>();
-        private readonly FlatButton _chargeNow;
         private readonly TitleWithSubtitle _settingsTitle;
         private readonly Card _settingsCard;
         private readonly TitleWithSubtitle _autostartRow;
         private readonly ToggleSwitch _autostartToggle;
+        private readonly TitleWithSubtitle _autoUpdateRow;
+        private readonly ToggleSwitch _autoUpdateToggle;
+        private readonly TitleWithSubtitle _versionRow;
+        private readonly FlatButton _updateButton;
 
         private bool _slidersInitialized;
         private bool _liveInFlight, _slowInFlight, _busy;
@@ -65,7 +73,8 @@ namespace Ayr.Ui
         private bool _msiCenterRunning;
         private string _bannerText;
         private int _visibleDeviceRows = 1;
-        private bool _chargeNowVisible;
+        private ReleaseInfo _availableUpdate;
+        private bool _updateInFlight;
 
         public MainWindow(UiBackend backend)
         {
@@ -111,22 +120,31 @@ namespace Ayr.Ui
                 Apply(() => _backend.ApplyTurboOffsets(offsets));
             };
 
-            _appleTitle = AddToPage(new TitleWithSubtitle(Theme, "Apple fast charge", "Fast charging for iPhone and iPad", Theme.Section, Theme.Background));
-            _appleToggle = AddToPage(new ToggleSwitch(Theme));
-            _appleToggle.Toggled += on => Apply(() => _backend.SetAppleFastCharge(on));
+            _appleTitle = AddToPage(new TitleWithSubtitle(Theme, "Apple fast charge", "Faster charging for iPhone and iPad", Theme.Section, Theme.Background));
             _appleCard = AddToPage(new Card(Theme));
+            _appleAutomaticRow = AddTo(_appleCard, new TitleWithSubtitle(Theme, "Send automatically", "Every iPhone or iPad gets the request when plugged in", Theme.BodyBold, Theme.Surface));
+            _appleToggle = AddTo(_appleCard, new ToggleSwitch(Theme) { BackColor = Theme.Surface });
+            _appleToggle.Toggled += on => Apply(() => _backend.SetAppleAutoFastCharge(on));
+            _appleDivider = AddTo(_appleCard, new Panel { BackColor = Theme.Border });
+            _toolTip = new ThemedToolTip(Theme);
             for (int row = 0; row < MaxDeviceRows; row++)
             {
-                _deviceRows.Add(AddTo(_appleCard, new DeviceRow(Theme)));
+                DeviceRow deviceRow = AddTo(_appleCard, new DeviceRow(Theme, _toolTip));
+                deviceRow.SendClicked += () => Apply(_backend.SendAppleFastCharge);
+                _deviceRows.Add(deviceRow);
             }
-            _chargeNow = AddTo(_appleCard, new FlatButton(Theme, "Fast charge now", ButtonStyle.Secondary) { BackColor = Theme.Surface });
-            _chargeNow.Click += (sender, e) => Apply(_backend.SendAppleFastChargeNow);
 
             _settingsTitle = AddToPage(Section("Settings"));
             _settingsCard = AddToPage(new Card(Theme));
             _autostartRow = AddTo(_settingsCard, new TitleWithSubtitle(Theme, "Start with Windows", "Restores your fan and performance settings", Theme.BodyBold, Theme.Surface));
             _autostartToggle = AddTo(_settingsCard, new ToggleSwitch(Theme) { BackColor = Theme.Surface });
             _autostartToggle.Toggled += on => Apply(() => _backend.SetAutostart(on), rereadAutostart: true);
+            _autoUpdateRow = AddTo(_settingsCard, new TitleWithSubtitle(Theme, "Automatic updates", "Installs new versions from GitHub", Theme.BodyBold, Theme.Surface));
+            _autoUpdateToggle = AddTo(_settingsCard, new ToggleSwitch(Theme) { BackColor = Theme.Surface });
+            _autoUpdateToggle.Toggled += on => Apply(() => _backend.SetAutoUpdate(on));
+            _versionRow = AddTo(_settingsCard, new TitleWithSubtitle(Theme, "Ayr " + AppVersion.Current, null, Theme.BodyBold, Theme.Surface));
+            _updateButton = AddTo(_settingsCard, new FlatButton(Theme, CheckForUpdatesLabel, ButtonStyle.Secondary) { BackColor = Theme.Surface });
+            _updateButton.Click += (sender, e) => OnUpdateClicked();
 
             Controls.Add(_viewport);
             Controls.Add(_header);
@@ -172,6 +190,7 @@ namespace Ayr.Ui
             {
                 _liveTimer.Dispose();
                 _slowTimer.Dispose();
+                _toolTip.Dispose();
             }
             base.Dispose(disposing);
             if (disposing)
@@ -204,12 +223,56 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _appleToggle, _chargeNow, _autostartToggle };
-            foreach (Control input in inputs)
+            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _appleToggle, _autostartToggle, _autoUpdateToggle };
+            foreach (Control input in inputs.Concat(_deviceRows))
             {
                 input.Enabled = !busy;
             }
             UseWaitCursor = busy;
+        }
+
+        private void OnUpdateClicked()
+        {
+            if (_updateInFlight)
+            {
+                return;
+            }
+            if (_availableUpdate == null)
+            {
+                CheckForUpdate();
+            }
+            else
+            {
+                InstallUpdate(_availableUpdate);
+            }
+        }
+
+        private void CheckForUpdate()
+        {
+            SetUpdateInFlight(true, "Checking for updates…");
+            _backend.RunUpdate(this, _backend.FindUpdate, (release, error) =>
+            {
+                SetUpdateInFlight(false, error != null ? "Couldn't check: " + error.Message
+                    : release == null ? "You have the latest version"
+                    : "Version " + release.Version + " is available");
+                _availableUpdate = release;
+                _updateButton.Text = release == null ? CheckForUpdatesLabel : "Update to " + release.Version;
+            });
+        }
+
+        // On success the tray restarts into the new version, which closes this window.
+        private void InstallUpdate(ReleaseInfo release)
+        {
+            SetUpdateInFlight(true, "Installing " + release.Version + "…");
+            _backend.RunUpdate(this, () => _backend.InstallUpdate(release), (message, error) =>
+                SetUpdateInFlight(false, error == null ? message + ", restarting…" : "Update failed: " + error.Message));
+        }
+
+        private void SetUpdateInFlight(bool inFlight, string status)
+        {
+            _updateInFlight = inFlight;
+            _updateButton.Inactive = inFlight;
+            _versionRow.SetSubtitle(status);
         }
 
         // One line at the top of the window: a failed change matters most, then unreadable hardware, then MSI Center.
@@ -280,34 +343,32 @@ namespace Ayr.Ui
                 _memoryOffset.Value = slow.Desired.TurboOffsets.MemoryMhz;
                 _slidersInitialized = true;
             }
-            _appleToggle.Checked = slow.Desired.AppleFastCharge;
+            _appleToggle.Checked = slow.Desired.AppleAutoFastCharge;
+            _autoUpdateToggle.Checked = slow.Desired.AutoUpdate;
             if (slow.AutostartOn.HasValue)
             {
                 _autostartToggle.Checked = slow.AutostartOn.Value;
             }
-            ShowAppleDevices(slow.AppleDevices);
+            ShowAppleDevices(slow);
             _msiCenterRunning = slow.MsiCenterRunning;
             UpdateBanner();
         }
 
-        private void ShowAppleDevices(IReadOnlyList<AppleDevice> devices)
+        private void ShowAppleDevices(SlowState slow)
         {
-            if (devices.Count == 0)
+            int connected = slow.AppleDevices.Count;
+            if (connected == 0)
             {
-                _deviceRows[0].SetDevice("No device connected", "Plug in an iPhone or iPad", connected: false);
+                _deviceRows[0].SetContent(DeviceRowContent.NoDevice);
             }
-            for (int row = 0; row < Math.Min(devices.Count, MaxDeviceRows); row++)
+            for (int row = 0; row < Math.Min(connected, MaxDeviceRows); row++)
             {
-                AppleDevice device = devices[row];
-                string detail = device.LastRequest.HasValue ? "Fast charge sent at " + device.LastRequest.Value.ToString("HH:mm") : "Connected";
-                _deviceRows[row].SetDevice(device.Model, detail, connected: true);
+                _deviceRows[row].SetContent(DeviceRowContent.For(slow.AppleDevices[row], slow.Desired.AppleAutoFastCharge, slow.NextAppleRequestAllowedAt));
             }
-            int visibleRows = Math.Max(1, Math.Min(MaxDeviceRows, devices.Count));
-            bool chargeNowVisible = devices.Count > 0;
-            if (visibleRows != _visibleDeviceRows || chargeNowVisible != _chargeNowVisible)
+            int visibleRows = Math.Max(1, Math.Min(MaxDeviceRows, connected));
+            if (visibleRows != _visibleDeviceRows)
             {
                 _visibleDeviceRows = visibleRows;
-                _chargeNowVisible = chargeNowVisible;
                 Relayout();
             }
         }
@@ -357,7 +418,7 @@ namespace Ayr.Ui
             Stack(_performanceTitle, left, inner, Scaled(24), Scaled(6), ref y);
             Stack(_performance, left, inner, Scaled(40), Scaled(12), ref y);
             Stack(_overclockCard, left, inner, LayoutOverclockCard(cardInner), Scaled(20), ref y);
-            LayoutAppleHeader(left, inner, ref y);
+            Stack(_appleTitle, left, inner, Scaled(36), Scaled(8), ref y);
             Stack(_appleCard, left, inner, LayoutAppleCard(cardInner), Scaled(20), ref y);
             Stack(_settingsTitle, left, inner, Scaled(24), Scaled(6), ref y);
             Stack(_settingsCard, left, inner, LayoutSettingsCard(cardInner), Scaled(16), ref y);
@@ -392,17 +453,13 @@ namespace Ayr.Ui
             return y;
         }
 
-        private void LayoutAppleHeader(int left, int inner, ref int y)
-        {
-            _appleTitle.SetBounds(left, y, inner - Scaled(60), Scaled(36));
-            _appleToggle.SetBounds(left + inner - Scaled(40), y + Scaled(6), Scaled(40), Scaled(22));
-            y += Scaled(42);
-        }
-
         private int LayoutAppleCard(int cardInner)
         {
             int padding = Scaled(CardPadding);
-            int y = Scaled(12);
+            int y = padding;
+            LayoutToggleRow(_appleAutomaticRow, _appleToggle, padding, cardInner, ref y);
+            y += Scaled(12);
+            Stack(_appleDivider, padding, cardInner, 1, Scaled(12), ref y);
             for (int row = 0; row < MaxDeviceRows; row++)
             {
                 bool visible = row < _visibleDeviceRows;
@@ -412,21 +469,29 @@ namespace Ayr.Ui
                     Stack(_deviceRows[row], padding, cardInner, Scaled(40), Scaled(6), ref y);
                 }
             }
-            _chargeNow.Visible = _chargeNowVisible;
-            if (_chargeNowVisible)
-            {
-                y += Scaled(4);
-                Stack(_chargeNow, padding, cardInner, Scaled(36), 0, ref y);
-            }
             return y + Scaled(8);
         }
 
         private int LayoutSettingsCard(int cardInner)
         {
             int padding = Scaled(CardPadding);
-            _autostartRow.SetBounds(padding, padding, cardInner - Scaled(60), Scaled(38));
-            _autostartToggle.SetBounds(padding + cardInner - Scaled(40), padding + Scaled(8), Scaled(40), Scaled(22));
-            return padding + Scaled(38) + padding;
+            int rowGap = Scaled(12);
+            int y = padding;
+            LayoutToggleRow(_autostartRow, _autostartToggle, padding, cardInner, ref y);
+            y += rowGap;
+            LayoutToggleRow(_autoUpdateRow, _autoUpdateToggle, padding, cardInner, ref y);
+            y += rowGap;
+            int buttonWidth = Scaled(150);
+            _versionRow.SetBounds(padding, y, cardInner - buttonWidth - Scaled(12), Scaled(38));
+            _updateButton.SetBounds(padding + cardInner - buttonWidth, y + Scaled(3), buttonWidth, Scaled(32));
+            return y + Scaled(38) + padding;
+        }
+
+        private void LayoutToggleRow(TitleWithSubtitle row, ToggleSwitch toggle, int x, int width, ref int y)
+        {
+            row.SetBounds(x, y, width - Scaled(60), Scaled(38));
+            toggle.SetBounds(x + width - Scaled(40), y + Scaled(8), Scaled(40), Scaled(22));
+            y += Scaled(38);
         }
 
         private static void Stack(Control control, int x, int width, int height, int gapAfter, ref int y)

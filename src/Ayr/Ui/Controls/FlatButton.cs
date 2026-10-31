@@ -11,6 +11,7 @@ namespace Ayr.Ui.Controls
 
         private readonly ButtonStyle _style;
         private bool _hovered;
+        private bool _inactive;
 
         public FlatButton(Theme theme, string text, ButtonStyle style) : base(theme)
         {
@@ -19,6 +20,23 @@ namespace Ayr.Ui.Controls
             TabStop = true;
             Cursor = Cursors.Hand;
         }
+
+        /// <summary>Looks disabled and ignores clicks, but unlike a disabled control it still gets hover, so a tooltip can say why.</summary>
+        public bool Inactive
+        {
+            get => _inactive;
+            set
+            {
+                if (_inactive != value)
+                {
+                    _inactive = value;
+                    UpdateCursor();
+                    Invalidate();
+                }
+            }
+        }
+
+        private bool Dimmed => !Enabled || _inactive;
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -31,10 +49,24 @@ namespace Ayr.Ui.Controls
             {
                 RoundedRectangle.Outline(graphics, bounds, CornerRadius, Theme.Border);
             }
-            Color text = !Enabled ? Theme.TextMuted : _style == ButtonStyle.Primary ? Theme.AccentText : Theme.Text;
+            Color text = Dimmed ? Theme.TextMuted : _style == ButtonStyle.Primary ? Theme.AccentText : Theme.Text;
             TextRenderer.DrawText(graphics, Text, Theme.BodyBold, ClientRectangle, text,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
             DrawFocus(graphics, bounds);
+        }
+
+        protected override void OnClick(EventArgs e)
+        {
+            if (!_inactive)
+            {
+                base.OnClick(e);
+            }
+        }
+
+        protected override void OnTextChanged(EventArgs e)
+        {
+            Invalidate();
+            base.OnTextChanged(e);
         }
 
         protected override void OnMouseEnter(EventArgs e)
@@ -61,14 +93,16 @@ namespace Ayr.Ui.Controls
 
         protected override void OnEnabledChanged(EventArgs e)
         {
-            Cursor = Enabled ? Cursors.Hand : Cursors.Default;
+            UpdateCursor();
             Invalidate();
             base.OnEnabledChanged(e);
         }
 
+        private void UpdateCursor() => Cursor = Dimmed ? Cursors.Default : Cursors.Hand;
+
         private Color FillColor()
         {
-            if (!Enabled)
+            if (Dimmed)
             {
                 return Theme.SurfaceAlt;
             }

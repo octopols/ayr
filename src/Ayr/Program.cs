@@ -49,6 +49,9 @@ namespace Ayr
                 case TrayLauncher.TrayCommand:
                     TrayLauncher.Launch();
                     return ExitCode.Success;
+                case TrayLauncher.AfterUpdateCommand:
+                    TrayLauncher.LaunchAfterUpdate(args);
+                    return ExitCode.Success;
                 case AutostartTask.SignInArgument:
                     TrayLauncher.LaunchAtSignIn();
                     return ExitCode.Success;

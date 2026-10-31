@@ -15,7 +15,8 @@ namespace Ayr.App
         private const string PerformanceKey = "perf";
         private const string TurboCoreKey = "turbo_core";
         private const string TurboMemoryKey = "turbo_memory";
-        private const string AppleFastChargeKey = "apple_fastcharge";
+        private const string AppleAutoFastChargeKey = "apple_fastcharge";
+        private const string AutoUpdateKey = "auto_update";
         private const string On = "on";
         private const string Off = "off";
 
@@ -24,9 +25,10 @@ namespace Ayr.App
         public FanMode Fan { get; set; } = FanMode.Auto;
         public PerformanceLevel Performance { get; set; } = PerformanceLevel.Unknown;
         public GpuOffsets TurboOffsets { get; set; } = GpuOffsets.Default;
-        public bool AppleFastCharge { get; set; }
+        public bool AppleAutoFastCharge { get; set; }
+        public bool AutoUpdate { get; set; } = true;
 
-        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleFastCharge;
+        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleAutoFastCharge;
 
         public static DesiredState Load()
         {
@@ -51,7 +53,8 @@ namespace Ayr.App
                     ActivityLog.Write("ignored invalid turbo offsets in state.ini: " + core + "/" + memory);
                 }
             }
-            state.AppleFastCharge = values.TryGetValue(AppleFastChargeKey, out string apple) && apple == On;
+            state.AppleAutoFastCharge = values.TryGetValue(AppleAutoFastChargeKey, out string apple) && apple == On;
+            state.AutoUpdate = !values.TryGetValue(AutoUpdateKey, out string update) || update != Off;
             return state;
         }
 
@@ -63,7 +66,8 @@ namespace Ayr.App
                 [PerformanceKey] = Performance.ToString().ToLowerInvariant(),
                 [TurboCoreKey] = TurboOffsets.CoreMhz.ToString(CultureInfo.InvariantCulture),
                 [TurboMemoryKey] = TurboOffsets.MemoryMhz.ToString(CultureInfo.InvariantCulture),
-                [AppleFastChargeKey] = AppleFastCharge ? On : Off
+                [AppleAutoFastChargeKey] = AppleAutoFastCharge ? On : Off,
+                [AutoUpdateKey] = AutoUpdate ? On : Off
             });
         }
 

@@ -32,20 +32,28 @@ namespace Ayr.Ui
         private readonly Control _uiThread = new Control();
         private readonly Supervisor _supervisor;
         private readonly Thread _supervisorThread;
+        private readonly AutoUpdateTimer _autoUpdate;
         private MainWindow _main;
         private QuickPanel _quick;
         private TrayAnchor _anchor;
         private DateTime _lastTooltip = DateTime.MinValue;
         private DateTime _quickClickedAway = DateTime.MinValue;
 
-        public TrayApp()
+        /// <param name="startupNotice">Shown as a notification once the tray is up, or null.</param>
+        public TrayApp(string startupNotice)
         {
             // Background results are marshalled through this control, so it needs its window handle before any window opens.
             _ = _uiThread.Handle;
             _backend = new UiBackend(_hardware);
             _backend.ModeChanged += change => _uiThread.BeginInvoke((Action)(() => OnModeChanged(change)));
+            _backend.UpdateInstalled += () => _uiThread.BeginInvoke((Action)RestartIntoNewVersion);
+            _autoUpdate = new AutoUpdateTimer(_backend, _uiThread, canRestart: () => !AnyWindowOpen);
 
             _notifyIcon = new NotifyIcon { Icon = _trayIcon, Text = AppName, Visible = true };
+            if (startupNotice != null)
+            {
+                _notifyIcon.ShowBalloonTip(BalloonMs, AppName, startupNotice, ToolTipIcon.Info);
+            }
             _notifyIcon.MouseDown += (sender, e) => _anchor = TrayAnchor.Capture(Cursor.Position);
             _notifyIcon.MouseClick += (sender, e) => ToggleQuickPanel();
             _notifyIcon.MouseDoubleClick += (sender, e) => OpenMainWindow();
@@ -64,7 +72,9 @@ namespace Ayr.Ui
 
         protected override void ExitThreadCore()
         {
+            _autoUpdate.Dispose();
             _main?.Close();
+            _quick?.Close();
             _supervisor.Stop();
             // The supervisor switches Silent to Auto on its way out; that must finish before the process ends.
             if (_supervisorThread.Join(SupervisorExitTimeout))
@@ -76,6 +86,15 @@ namespace Ayr.Ui
             _trayIcon.Dispose();
             _uiThread.Dispose();
             base.ExitThreadCore();
+        }
+
+        // Stopping the supervisor switches Silent to Auto and saves that; the new version should start from the user's choice.
+        private void RestartIntoNewVersion()
+        {
+            DesiredState chosen = DesiredState.Load();
+            ExitThread();
+            chosen.Save();
+            TrayLauncher.StartAfterUpdate();
         }
 
         private void TrimOnceStartupSettles()

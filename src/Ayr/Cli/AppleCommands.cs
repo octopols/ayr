@@ -13,11 +13,11 @@ namespace Ayr.Cli
     public sealed class AppleCommands
     {
         public const string Usage =
-@"ayrctl apple                         fast charge on/off, MSI driver state, connected Apple devices
+@"ayrctl apple                         automatic fast charge on/off, MSI driver state, connected Apple devices
 ayrctl apple list [--all]            connected Apple devices with details (--all: also ones seen before)
-ayrctl apple on                      fast charge automatically: one request each time an Apple device is plugged in
-ayrctl apple off                     stop sending requests (MSI's driver stays loaded until the next reboot)
-ayrctl apple boost                   send one request now (at most one per 5 minutes, like Super Charger)";
+ayrctl apple on                      send the fast-charge request automatically to every Apple device you connect
+ayrctl apple off                     stop sending automatically (devices already fast charging stay so until unplugged)
+ayrctl apple send                    send the request now (once per connection, at most every 5 minutes)";
 
         private const string AllFlag = "--all";
 
@@ -29,7 +29,7 @@ ayrctl apple boost                   send one request now (at most one per 5 min
             _output = output;
         }
 
-        public static bool NeedsElevation(string subcommand) => subcommand == "boost" || subcommand == "on" || subcommand == "off";
+        public static bool NeedsElevation(string subcommand) => subcommand == "send" || subcommand == "on" || subcommand == "off";
 
         public ExitCode Execute(string subcommand, IReadOnlyList<string> args)
         {
@@ -42,17 +42,13 @@ ayrctl apple boost                   send one request now (at most one per 5 min
                 case "list":
                     WriteDevices(includeDisconnected: args.Contains(AllFlag));
                     return ExitCode.Success;
-                case "boost":
+                case "send":
                     return SendNow();
                 case "on":
-                    _charger.SetAutomatic(true);
-                    Supervisor.EnsureBackgroundInstance();
-                    _output.WriteLine("Fast charge is on: each Apple device gets one request about {0} s after it is plugged in.",
-                        AppleChargeController.SettleTime.TotalSeconds);
-                    return ExitCode.Success;
+                    return TurnOn();
                 case "off":
                     _charger.SetAutomatic(false);
-                    _output.WriteLine("Fast charge is off: no more requests. MSI's driver is left loaded until the next reboot.");
+                    _output.WriteLine("Automatic fast charge is off. Devices already fast charging stay so until unplugged.");
                     return ExitCode.Success;
                 default:
                     _output.WriteLine(Usage);
@@ -60,10 +56,24 @@ ayrctl apple boost                   send one request now (at most one per 5 min
             }
         }
 
+        private ExitCode TurnOn()
+        {
+            _charger.SetAutomatic(true);
+            Supervisor.EnsureBackgroundInstance();
+            _output.WriteLine("Automatic fast charge is on: each Apple device gets the request about {0} s after it is plugged in.",
+                AppleChargeController.SettleTime.TotalSeconds);
+            ChargeRequestResult sentNow = _charger.SendIfAnyReady();
+            if (sentNow != null)
+            {
+                _output.WriteLine(sentNow.Message);
+            }
+            return ExitCode.Success;
+        }
+
         private ExitCode SendNow()
         {
             ChargeRequestResult result = _charger.SendForConnected();
-            _output.WriteLine(result.Message);
+            _output.WriteLine(result.Sent ? result.Message : "Not sent: " + result.Message);
             return result.Sent ? ExitCode.Success : ExitCode.Failure;
         }
 
@@ -71,14 +81,33 @@ ayrctl apple boost                   send one request now (at most one per 5 min
         {
             AppleChargeDriver driver = _charger.Driver;
             string driverState = driver.IsLoaded ? "ipadtst2 loaded (stays until restart)" : "ipadtst2 not loaded yet; loads with the first request";
-            List<AppleDevice> devices = _charger.Inventory.List(includeDisconnected: false);
-            _output.WriteLine("Fast charge  : {0}", DesiredState.Load().AppleFastCharge ? "on (one request per plug-in)" : "off");
+            List<AppleDeviceStatus> devices = _charger.ConnectedStatuses();
+            _output.WriteLine("Automatic    : {0}", DesiredState.Load().AppleAutoFastCharge ? "on (one request per device per connection)" : "off");
             _output.WriteLine("MSI driver   : {0}", driverState);
             _output.WriteLine("Supervisor   : {0}", Supervisor.IsRunning ? "running" : "not running");
             _output.WriteLine("Connected    : {0}", devices.Count == 0 ? "no Apple device" : devices.Count + " Apple device(s)");
-            foreach (AppleDevice device in devices)
+            foreach (AppleDeviceStatus status in devices)
             {
-                _output.WriteLine("  {0} {1}, last request {2}", device.Model, device.Serial, Format(device.LastRequest));
+                _output.WriteLine("  {0} {1}: {2}", status.Device.Model, status.Device.Serial, Describe(status));
+            }
+        }
+
+        private string Describe(AppleDeviceStatus status)
+        {
+            switch (status.State)
+            {
+                case FastChargeState.UnsupportedPort:
+                    return "this USB port can't fast charge";
+                case FastChargeState.Settling:
+                    return "just connected";
+                case FastChargeState.WaitingForGap:
+                    return "not fast charging; next request possible at " + Format(_charger.NextRequestAllowedAt);
+                case FastChargeState.Ready:
+                    return "not fast charging";
+                case FastChargeState.Requested:
+                    return "fast charging (request sent " + Format(status.Device.LastRequest) + ")";
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(status), status.State, "Unknown fast-charge state.");
             }
         }
 

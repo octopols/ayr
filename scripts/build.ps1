@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$OutDir = (Join-Path $PSScriptRoot '..\bin'),
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.1.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.0',
     [string]$InformationalVersion = $Version
 )
 $ErrorActionPreference = 'Stop'
@@ -35,7 +35,8 @@ $versionFile = Join-Path $objDir 'AssemblyVersion.g.cs'
 "@ | Set-Content $versionFile -Encoding UTF8
 
 $sources = @(Get-ChildItem $source -Recurse -Filter *.cs | ForEach-Object FullName) + $versionFile
-$references = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Management.dll', 'System.Windows.Forms.dll', 'System.Drawing.dll', 'System.ServiceProcess.dll' |
+$references = 'mscorlib.dll', 'System.dll', 'System.Core.dll', 'System.Management.dll', 'System.Windows.Forms.dll', 'System.Drawing.dll',
+    'System.ServiceProcess.dll', 'System.Runtime.Serialization.dll', 'System.Xml.dll', 'System.IO.Compression.dll', 'System.IO.Compression.FileSystem.dll' |
     ForEach-Object { "/reference:$(Join-Path $framework $_)" }
 $resources = 'app.ico', 'tray.ico', 'mark-24.png', 'mark-32.png', 'mark-40.png', 'mark-48.png' |
     ForEach-Object { "/resource:$(Join-Path $assets $_),Ayr.Ui.$_" }
