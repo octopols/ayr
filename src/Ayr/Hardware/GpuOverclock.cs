@@ -18,12 +18,21 @@ namespace Ayr.Hardware
 
         public GpuOverclock()
         {
-            string path = VendorLibrary.GpuControl.Locate();
+            string path;
+            try
+            {
+                path = VendorLibrary.GpuControl.Locate();
+            }
+            catch (Exception ex) when (ex is System.IO.IOException || ex is InvalidOperationException)
+            {
+                throw new GpuUnavailableException("GPU offsets are unavailable: " + ex.Message, ex);
+            }
             // The altered search path lets GInf.dll resolve its own dependencies from its folder.
             _module = Kernel32.LoadLibraryEx(path, IntPtr.Zero, Kernel32.LoadWithAlteredSearchPath);
             if (_module == IntPtr.Zero)
             {
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibrary failed for " + path);
+                var cause = new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibrary failed for " + path);
+                throw new GpuUnavailableException("GPU offsets are unavailable: " + cause.Message, cause);
             }
         }
 
@@ -82,7 +91,7 @@ namespace Ayr.Hardware
             }
             if (!InitialAndGetCurrentG())
             {
-                throw new InvalidOperationException("GInf.InitialAndGetCurrentG failed (NVIDIA GPU or driver unavailable).");
+                throw new GpuUnavailableException("GPU offsets are unavailable: no NVIDIA GPU or driver answered.", null);
             }
             _initialized = true;
         }

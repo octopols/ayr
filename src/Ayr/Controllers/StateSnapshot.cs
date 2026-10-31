@@ -17,11 +17,11 @@ namespace Ayr.Controllers
             FanModeByte = fans.ReadFanModeByte();
             CoolerBoostRegister = fans.TryReadCoolerBoostRegister();
             ShiftByte = performance.ReadShiftByte();
-            if (includeGpu)
+            GpuInfo? gpu = includeGpu ? performance.TryReadGpu() : null;
+            if (gpu.HasValue)
             {
-                GpuInfo gpu = performance.ReadGpu();
-                GpuCoreOffset = gpu.CoreOffsetMhz;
-                GpuMemoryOffset = gpu.MemoryOffsetMhz;
+                GpuCoreOffset = gpu.Value.CoreOffsetMhz;
+                GpuMemoryOffset = gpu.Value.MemoryOffsetMhz;
             }
         }
 

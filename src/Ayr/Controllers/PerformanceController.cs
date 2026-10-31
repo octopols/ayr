@@ -53,20 +53,48 @@ namespace Ayr.Controllers
             {
                 throw new ArgumentOutOfRangeException(nameof(level), level, "Only turbo, high, medium and low can be applied.");
             }
-            // The GPU overclock is removed before leaving Turbo and added only once Turbo is set.
+            // The GPU overclock is removed before leaving Turbo and added only once Turbo is set. Without a usable GPU
+            // library the level still changes; there are simply no offsets to add or remove.
             bool turbo = level == PerformanceLevel.Turbo;
             if (!turbo)
             {
-                ApplyGpuOffsets(GpuOffsets.None);
+                TryApplyGpuOffsets(GpuOffsets.None);
             }
             WriteShiftByte(shift);
             if (turbo)
             {
-                ApplyGpuOffsets(turboOffsets);
+                TryApplyGpuOffsets(turboOffsets);
             }
         }
 
         public void ApplyGpuOffsets(GpuOffsets offsets) => ApplyGpuOffsets(offsets.CoreMhz, offsets.MemoryMhz);
+
+        /// <summary>Returns false, and changes nothing, when GPU offsets are unavailable on this system.</summary>
+        public bool TryApplyGpuOffsets(GpuOffsets offsets)
+        {
+            try
+            {
+                ApplyGpuOffsets(offsets);
+                return true;
+            }
+            catch (GpuUnavailableException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>Null when GPU offsets are unavailable on this system.</summary>
+        public GpuInfo? TryReadGpu()
+        {
+            try
+            {
+                return ReadGpu();
+            }
+            catch (GpuUnavailableException)
+            {
+                return null;
+            }
+        }
 
         public void ApplyGpuOffsets(int coreMhz, int memoryMhz)
         {

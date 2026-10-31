@@ -41,12 +41,30 @@ namespace Ayr.Hardware
 
         private static ManagementObject[] Query(WmiBlock block)
         {
-            using (var searcher = new ManagementObjectSearcher(Namespace, "SELECT * FROM " + block.ClassName))
-            using (ManagementObjectCollection results = searcher.Get())
+            ManagementObject[] instances;
+            try
             {
-                return results.Cast<ManagementObject>().ToArray();
+                using (var searcher = new ManagementObjectSearcher(Namespace, "SELECT * FROM " + block.ClassName))
+                using (ManagementObjectCollection results = searcher.Get())
+                {
+                    instances = results.Cast<ManagementObject>().ToArray();
+                }
             }
+            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.InvalidClass || ex.ErrorCode == ManagementStatus.NotFound)
+            {
+                throw MissingFirmwareInterface(block, ex);
+            }
+            if (instances.Length == 0)
+            {
+                throw MissingFirmwareInterface(block, null);
+            }
+            return instances;
         }
+
+        // The MSI_* classes come from MSI's msiapcfg.dll (registered as wmiacpi's MOF), which MSI's drivers install.
+        private static InvalidOperationException MissingFirmwareInterface(WmiBlock block, Exception cause) =>
+            new InvalidOperationException("The MSI firmware interface (" + block + ") isn't available on this PC. Ayr needs an MSI "
+                + "laptop with MSI's system drivers installed (they come with MSI Center).", cause);
 
         private static byte ReadPayload(ManagementObject instance) =>
             (byte)(Convert.ToInt32(instance[PayloadProperty(instance)], CultureInfo.InvariantCulture) & 0xFF);
