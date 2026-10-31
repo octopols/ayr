@@ -57,8 +57,6 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     return WithElevation(Autostart);
                 case "apple":
                     return AppleCommand();
-                case "startup":
-                    return RunStartup();
                 case "supervise":
                     return RunSupervisor();
                 case "sentinel":
@@ -253,27 +251,6 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
             return AppleCommands.NeedsElevation(subcommand)
                 ? WithElevation(() => apple.Execute(subcommand, _args))
                 : apple.Execute(subcommand, _args);
-        }
-
-        // The logon task's entry point: apply, then stay on as the supervisor, since a child process could be ended
-        // together with the task.
-        private ExitCode RunStartup()
-        {
-            var hardware = new HardwareContext();
-            try
-            {
-                new StartupApplier(hardware).Apply();
-            }
-            catch (Exception ex)
-            {
-                ActivityLog.Write("startup apply failed: " + ex);
-                new ModeService(hardware).FailsafeAuto("startup apply failed");
-            }
-            using (var supervisor = new Supervisor(hardware, stayAliveWhenIdle: false, notify: null))
-            {
-                supervisor.Run();
-            }
-            return ExitCode.Success;
         }
 
         private ExitCode RunSupervisor()

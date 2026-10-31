@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows.Forms;
 using Ayr.App;
 using Ayr.Cli;
+using Ayr.Controllers;
 using Ayr.Ui;
 
 namespace Ayr
@@ -12,6 +13,7 @@ namespace Ayr
     public static class Program
     {
         private const string TrayCommand = "tray";
+        private const string SignInCommand = AutostartTask.StartupArgument;
 
         [STAThread]
         public static int Main(string[] args)
@@ -41,21 +43,51 @@ namespace Ayr
 
         private static ExitCode Run(string[] args, TextWriter output)
         {
-            bool trayRequested = args.Length > 0 && args[0].Equals(TrayCommand, StringComparison.OrdinalIgnoreCase);
+            string command = args.Length > 0 ? args[0].ToLowerInvariant() : null;
 #if TRAY_HOST
             // Ayr.exe, the Start menu entry, opens the tray when started without arguments.
-            trayRequested |= args.Length == 0;
+            command = command ?? TrayCommand;
 #endif
-            return trayRequested ? RunTray() : new CommandLine(output).Execute(args);
+            switch (command)
+            {
+                case TrayCommand:
+                    return RunTray(announceIfRunning: true);
+                case SignInCommand:
+                    return RunAtSignIn();
+                default:
+                    return new CommandLine(output).Execute(args);
+            }
         }
 
-        private static ExitCode RunTray()
+        // The "Start with Windows" logon task's entry point: restore the saved settings, then show the tray, which hosts
+        // the background guard.
+        private static ExitCode RunAtSignIn()
+        {
+            if (!Elevation.IsElevated)
+            {
+                Elevation.StartElevated(SignInCommand);
+                return ExitCode.Success;
+            }
+            var hardware = new HardwareContext();
+            try
+            {
+                new StartupApplier(hardware).Apply();
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("startup apply failed: " + ex);
+                new ModeService(hardware).FailsafeAuto("startup apply failed");
+            }
+            return RunTray(announceIfRunning: false);
+        }
+
+        private static ExitCode RunTray(bool announceIfRunning)
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             if (SingleInstance.IsRunning)
             {
-                ShowAlreadyRunning();
+                ShowAlreadyRunning(announceIfRunning);
                 return ExitCode.Success;
             }
             if (!Elevation.IsElevated)
@@ -67,7 +99,7 @@ namespace Ayr
             {
                 if (instance == null)
                 {
-                    ShowAlreadyRunning();
+                    ShowAlreadyRunning(announceIfRunning);
                     return ExitCode.Success;
                 }
                 Application.Run(new TrayApp());
@@ -75,8 +107,13 @@ namespace Ayr
             return ExitCode.Success;
         }
 
-        private static void ShowAlreadyRunning() =>
-            MessageBox.Show("Ayr is already running.\n\nClick the Ayr icon in the system tray.", "Ayr",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        private static void ShowAlreadyRunning(bool announce)
+        {
+            if (announce)
+            {
+                MessageBox.Show("Ayr is already running.\n\nClick the Ayr icon in the system tray.", "Ayr",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
     }
 }

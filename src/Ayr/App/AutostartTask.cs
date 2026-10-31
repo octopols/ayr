@@ -15,7 +15,7 @@ namespace Ayr.App
     {
         public const string TaskName = "Ayr";
         private const string TrayExecutable = "Ayr.exe";
-        private const string StartupArgument = "startup";
+        public const string StartupArgument = "startup";
 
         public bool IsInstalled => RunSchtasks("/query /tn " + TaskName) == 0;
 
