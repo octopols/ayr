@@ -1,6 +1,5 @@
 using System;
 using System.ComponentModel;
-using System.IO;
 using System.Runtime.InteropServices;
 using Ayr.Interop;
 
@@ -19,11 +18,7 @@ namespace Ayr.Hardware
 
         public GpuOverclock()
         {
-            string path = Path.Combine(MsiFoundationService.Directory, LibraryName);
-            if (!File.Exists(path))
-            {
-                throw new FileNotFoundException(LibraryName + " not found; MSI Foundation Service must stay installed for GPU offsets.", path);
-            }
+            string path = VendorLibrary.GpuControl.Locate();
             // The altered search path lets GInf.dll resolve its own dependencies from its folder.
             _module = Kernel32.LoadLibraryEx(path, IntPtr.Zero, Kernel32.LoadWithAlteredSearchPath);
             if (_module == IntPtr.Zero)

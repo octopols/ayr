@@ -5,6 +5,7 @@ using Ayr.Agent;
 using Ayr.App;
 using Ayr.Controllers;
 using Ayr.Diagnostics;
+using Ayr.Hardware;
 using Ayr.Ui;
 
 namespace Ayr.Cli
@@ -22,6 +23,7 @@ ayrctl oc <core> <memory>            set the Turbo GPU offsets in MHz (core 0-18
 ayrctl apply                         firmware handshake + saved settings (what MSI's services did at boot)
 ayrctl autostart [on|off]            logon task that applies saved settings and runs the background guard
 ayrctl tray                          tray icon with the same controls
+ayrctl uninstall                     remove the logon task and Ayr's WINIO driver entry, then delete the folder
 " + AppleCommands.Usage + @"
 
 Diagnostics
@@ -55,6 +57,8 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     return WithElevation(ApplySaved);
                 case "autostart":
                     return WithElevation(Autostart);
+                case "uninstall":
+                    return WithElevation(Uninstall);
                 case "apple":
                     return AppleCommand();
                 case "supervise":
@@ -85,7 +89,12 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
 
         private ExitCode ShowStatus()
         {
-            new StatusReport(new HardwareContext()).Write(_output);
+            var hardware = new HardwareContext();
+            if (!Elevation.IsElevated && !hardware.Fans.TryReadCoolerBoostRegister().HasValue)
+            {
+                return RelaunchElevated();
+            }
+            new StatusReport(hardware).Write(_output);
             return ExitCode.Success;
         }
 
@@ -244,6 +253,26 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
             }
         }
 
+        private ExitCode Uninstall()
+        {
+            string fans = "Fans are on Auto.";
+            try
+            {
+                new ModeService(new HardwareContext()).FailsafeAuto("uninstall");
+            }
+            catch (Exception ex)
+            {
+                fans = "Fans could not be set to Auto (" + ex.Message + "); run \"ayrctl fan auto\" before deleting Ayr.";
+            }
+            new AutostartTask().Remove();
+            bool driverRemoved = WinIoDriver.RemoveIfOwned();
+            _output.WriteLine("Removed the logon task{0}. {1}", driverRemoved
+                ? " and Ayr's WINIO driver entry (the driver unloads at the next restart)"
+                : "", fans);
+            _output.WriteLine("Exit the tray, then delete this folder: {0}", AppPaths.ExecutableDirectory);
+            return ExitCode.Success;
+        }
+
         private ExitCode AppleCommand()
         {
             string subcommand = Argument(1);
@@ -291,7 +320,8 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
 
         private ExitCode WithElevation(Func<ExitCode> command) => Elevation.IsElevated ? command() : RelaunchElevated();
 
-        // The ACPI-WMI blocks are sometimes readable unelevated (after an elevated query enabled collection), sometimes not.
+        // Unelevated reads work only sometimes: the ACPI-WMI blocks are readable after an elevated query has enabled
+        // collection, and EC RAM only through MSI Foundation Service's pipe, if that service is installed.
         private ExitCode WithElevationFallback(Func<ExitCode> command)
         {
             try

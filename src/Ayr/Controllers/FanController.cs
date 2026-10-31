@@ -28,7 +28,8 @@ namespace Ayr.Controllers
 
         public FanMode ReadMode()
         {
-            if (IsCoolerBoostOn(ReadCoolerBoostRegister()))
+            byte? coolerBoost = TryReadCoolerBoostRegister();
+            if (coolerBoost.HasValue && IsCoolerBoostOn(coolerBoost.Value))
             {
                 return FanMode.Boost;
             }
@@ -84,13 +85,31 @@ namespace Ayr.Controllers
 
         public byte ReadCoolerBoostRegister() => _ec.ReadByte(RegisterMap.CoolerBoostRegister);
 
+        /// <summary>Null when EC RAM can't be reached on this system; every other fan control still works through WMI.</summary>
+        public byte? TryReadCoolerBoostRegister()
+        {
+            try
+            {
+                return ReadCoolerBoostRegister();
+            }
+            catch (EcUnavailableException)
+            {
+                return null;
+            }
+        }
+
         public static bool IsCoolerBoostOn(byte coolerBoostRegister) => (coolerBoostRegister & RegisterMap.CoolerBoostBit) != 0;
 
         public void SetCoolerBoost(bool on)
         {
-            byte current = ReadCoolerBoostRegister();
-            byte wanted = on ? (byte)(current | RegisterMap.CoolerBoostBit) : (byte)(current & ~RegisterMap.CoolerBoostBit);
-            if (wanted != current)
+            // Turning it on needs EC access and fails with the reason; with no EC access there is nothing to turn off.
+            byte? current = on ? ReadCoolerBoostRegister() : TryReadCoolerBoostRegister();
+            if (!current.HasValue)
+            {
+                return;
+            }
+            byte wanted = on ? (byte)(current.Value | RegisterMap.CoolerBoostBit) : (byte)(current.Value & ~RegisterMap.CoolerBoostBit);
+            if (wanted != current.Value)
             {
                 _ec.WriteByte(RegisterMap.CoolerBoostRegister, wanted);
             }

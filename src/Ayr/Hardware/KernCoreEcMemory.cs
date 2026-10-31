@@ -8,8 +8,8 @@ using Ayr.Interop;
 namespace Ayr.Hardware
 {
     /// <summary>
-    /// EC RAM through MSI's KernCoreLib64.dll, a rebranded WinIo, and its already-installed WINIO driver. This is the call
-    /// MSI Foundation Service makes behind its pipe, done in-process. Requires administrator rights.
+    /// EC RAM through MSI's KernCoreLib64.dll, a rebranded WinIo, and its WINIO driver, which Ayr starts when needed. These
+    /// are the calls MSI Foundation Service made behind its pipe, done in-process. Requires administrator rights.
     /// </summary>
     public sealed class KernCoreEcMemory : EcMemory
     {
@@ -27,15 +27,9 @@ namespace Ayr.Hardware
         private static readonly object LoadLock = new object();
         private static GetPhysLongFunction _getPhysLong;
         private static SetPhysLongFunction _setPhysLong;
+        private static EcUnavailableException _unavailable;
 
         public override string Description => "KernCoreLib (WINIO driver)";
-
-        /// <summary>A copy next to ayrctl (vendor\) wins over MSI Foundation Service's own copy.</summary>
-        public static string FindLibrary()
-        {
-            string bundled = Path.Combine(AppPaths.VendorDirectory, LibraryName);
-            return File.Exists(bundled) ? bundled : Path.Combine(MsiFoundationService.Directory, LibraryName);
-        }
 
         protected override uint ReadDword(ulong physicalAddress)
         {
@@ -56,33 +50,49 @@ namespace Ayr.Hardware
             }
         }
 
-        // Loaded once per process and never shut down: WinIo's shutdown can stop the WINIO service that other users of
-        // the driver depend on.
+        // Set up once per process. A failure is remembered rather than retried on every read, so a system without the
+        // driver isn't asked to start it every couple of seconds.
         private static void EnsureLoaded()
         {
             lock (LoadLock)
             {
+                if (_unavailable != null)
+                {
+                    throw _unavailable;
+                }
                 if (_getPhysLong != null)
                 {
                     return;
                 }
-                string path = FindLibrary();
-                if (!File.Exists(path))
+                try
                 {
-                    throw new FileNotFoundException(LibraryName + " not found (needed for Cooler Boost).", path);
+                    Load();
                 }
-                IntPtr module = Kernel32.LoadLibraryEx(path, IntPtr.Zero, Kernel32.LoadWithAlteredSearchPath);
-                if (module == IntPtr.Zero)
+                catch (Exception ex) when (ex is IOException || ex is Win32Exception || ex is InvalidOperationException || ex is EntryPointNotFoundException)
                 {
-                    throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibrary failed for " + path);
+                    _unavailable = new EcUnavailableException("Cooler Boost is unavailable: " + ex.Message, ex);
+                    ActivityLog.Write(_unavailable.Message);
+                    throw _unavailable;
                 }
-                if (!Bind<InitializeKernCoreLibFunction>(module, "InitializeKernCoreLib")())
-                {
-                    throw new IOException("InitializeKernCoreLib failed (needs administrator rights and the WINIO driver).");
-                }
-                _setPhysLong = Bind<SetPhysLongFunction>(module, "SetPhysLong");
-                _getPhysLong = Bind<GetPhysLongFunction>(module, "GetPhysLong");
             }
+        }
+
+        // Never shut down again: WinIo's shutdown can stop the WINIO service that other users of the driver depend on.
+        private static void Load()
+        {
+            string path = VendorLibrary.EcAccess.Locate();
+            WinIoDriver.EnsureRunning();
+            IntPtr module = Kernel32.LoadLibraryEx(path, IntPtr.Zero, Kernel32.LoadWithAlteredSearchPath);
+            if (module == IntPtr.Zero)
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error(), "LoadLibrary failed for " + path);
+            }
+            if (!Bind<InitializeKernCoreLibFunction>(module, "InitializeKernCoreLib")())
+            {
+                throw new IOException("InitializeKernCoreLib failed (needs administrator rights and the WINIO driver).");
+            }
+            _setPhysLong = Bind<SetPhysLongFunction>(module, "SetPhysLong");
+            _getPhysLong = Bind<GetPhysLongFunction>(module, "GetPhysLong");
         }
 
         private static T Bind<T>(IntPtr module, string export) where T : Delegate

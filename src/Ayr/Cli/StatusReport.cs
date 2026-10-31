@@ -19,13 +19,15 @@ namespace Ayr.Cli
         public void Write(TextWriter output)
         {
             byte fanModeByte = _hardware.Fans.ReadFanModeByte();
-            byte coolerBoost = _hardware.Fans.ReadCoolerBoostRegister();
+            byte? coolerBoost = _hardware.Fans.TryReadCoolerBoostRegister();
             byte shift = _hardware.Performance.ReadShiftByte();
             TelemetrySample sample = _hardware.Telemetry.Sample();
             DesiredState desired = DesiredState.Load();
 
-            output.WriteLine("Fan mode     : {0,-7} (EC 0xF4=0x{1:X2}, EC 0x98=0x{2:X2}, cooler boost {3})",
-                Lower(_hardware.Fans.ReadMode()), fanModeByte, coolerBoost, FanController.IsCoolerBoostOn(coolerBoost) ? "on" : "off");
+            string coolerBoostState = coolerBoost.HasValue
+                ? string.Format("EC 0x98=0x{0:X2}, cooler boost {1}", coolerBoost.Value, FanController.IsCoolerBoostOn(coolerBoost.Value) ? "on" : "off")
+                : "cooler boost unavailable: no EC access";
+            output.WriteLine("Fan mode     : {0,-7} (EC 0xF4=0x{1:X2}, {2})", Lower(_hardware.Fans.ReadMode()), fanModeByte, coolerBoostState);
             output.WriteLine("Performance  : {0,-7} (EC 0xF2=0x{1:X2})", Lower(PerformanceController.LevelOf(shift)), shift);
             output.WriteLine("CPU          : {0} °C, fan duty {1}%, {2} RPM", sample.CpuTemperature, sample.CpuDuty, sample.CpuFanRpm);
             output.WriteLine("GPU          : {0} °C, fan duty {1}%, {2} RPM", sample.GpuTemperature, sample.GpuDuty, sample.GpuFanRpm);

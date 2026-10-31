@@ -86,9 +86,9 @@ namespace Ayr.Hardware
                 {
                     pipe.Connect(ConnectTimeoutMs);
                 }
-                catch (TimeoutException)
+                catch (TimeoutException ex)
                 {
-                    throw new IOException("Pipe " + PipeName + " is not available. Is 'MSI Foundation Service' running?");
+                    throw new EcUnavailableException("MSI Foundation Service's pipe is not available; run Ayr as administrator instead.", ex);
                 }
                 pipe.ReadMode = PipeTransmissionMode.Message;
                 pipe.Write(request, 0, request.Length);

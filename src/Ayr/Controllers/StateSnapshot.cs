@@ -6,7 +6,7 @@ using Ayr.Hardware;
 
 namespace Ayr.Controllers
 {
-    /// <summary>Everything ayrctl can change, captured before a write so it can be put back exactly.</summary>
+    /// <summary>Everything Ayr can change, captured before a write so it can be put back exactly.</summary>
     public sealed class StateSnapshot
     {
         private StateSnapshot(FanController fans, PerformanceController performance, bool includeGpu)
@@ -15,7 +15,7 @@ namespace Ayr.Controllers
             CpuCurve = fans.ReadCurve(WmiBlock.Cpu);
             VgaCurve = fans.ReadCurve(WmiBlock.Vga);
             FanModeByte = fans.ReadFanModeByte();
-            CoolerBoostRegister = fans.ReadCoolerBoostRegister();
+            CoolerBoostRegister = fans.TryReadCoolerBoostRegister();
             ShiftByte = performance.ReadShiftByte();
             if (includeGpu)
             {
@@ -29,7 +29,7 @@ namespace Ayr.Controllers
         public byte[] CpuCurve { get; }
         public byte[] VgaCurve { get; }
         public byte FanModeByte { get; }
-        public byte CoolerBoostRegister { get; }
+        public byte? CoolerBoostRegister { get; }
         public byte ShiftByte { get; }
         public int? GpuCoreOffset { get; }
         public int? GpuMemoryOffset { get; }
@@ -47,10 +47,9 @@ namespace Ayr.Controllers
             {
                 fans.WriteFanModeByte(FanModeByte);
             }
-            bool coolerBoostWanted = FanController.IsCoolerBoostOn(CoolerBoostRegister);
-            if (FanController.IsCoolerBoostOn(fans.ReadCoolerBoostRegister()) != coolerBoostWanted)
+            if (CoolerBoostRegister.HasValue)
             {
-                fans.SetCoolerBoost(coolerBoostWanted);
+                fans.SetCoolerBoost(FanController.IsCoolerBoostOn(CoolerBoostRegister.Value));
             }
             if (performance.ReadShiftByte() != ShiftByte)
             {
@@ -65,8 +64,9 @@ namespace Ayr.Controllers
         public void AppendToLog() => File.AppendAllText(AppPaths.SnapshotLog, Describe() + Environment.NewLine);
 
         private string Describe() => string.Format(CultureInfo.InvariantCulture,
-            "taken={0:yyyy-MM-ddTHH:mm:ss} cpuCurve={1} vgaCurve={2} fanMode=0x{3:X2} shift=0x{4:X2} ec98=0x{5:X2} gpu={6}/{7}",
-            TakenAt, string.Join(",", CpuCurve), string.Join(",", VgaCurve), FanModeByte, ShiftByte, CoolerBoostRegister,
+            "taken={0:yyyy-MM-ddTHH:mm:ss} cpuCurve={1} vgaCurve={2} fanMode=0x{3:X2} shift=0x{4:X2} ec98={5} gpu={6}/{7}",
+            TakenAt, string.Join(",", CpuCurve), string.Join(",", VgaCurve), FanModeByte, ShiftByte, 
+            CoolerBoostRegister.HasValue ? "0x" + CoolerBoostRegister.Value.ToString("X2", CultureInfo.InvariantCulture) : "-",
             GpuCoreOffset?.ToString(CultureInfo.InvariantCulture) ?? "-", GpuMemoryOffset?.ToString(CultureInfo.InvariantCulture) ?? "-");
     }
 }
