@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
@@ -33,10 +34,10 @@ namespace Ayr.Apple
         public bool IsLoaded => KernelDriver.AppleCharge.IsRunning;
 
         /// <summary>
-        /// Runs ipadchg2.exe once, unless Super Charger's own service is sending requests, a request is already in progress,
-        /// or the last one was too recent.
+        /// Runs ipadchg2.exe once and records it for the given devices, unless Super Charger's own service is sending
+        /// requests, a request is already in progress, or the last one was too recent.
         /// </summary>
-        public bool TrySend(AppleRequestLog log, out string refusal)
+        public bool TrySend(AppleRequestLog log, IEnumerable<string> instanceIds, out string refusal)
         {
             // Two senders could put requests seconds apart, the burst that hung Windows.
             if (MsiSoftware.IsSuperChargerRunning)
@@ -61,7 +62,7 @@ namespace Ayr.Apple
                         return false;
                     }
                     // Recorded before running: if the request takes the machine down, the next attempt still honours the gap.
-                    log.RecordRequest(DateTime.Now);
+                    log.Record(DateTime.Now, instanceIds);
                     RunHelper();
                     refusal = null;
                     return true;

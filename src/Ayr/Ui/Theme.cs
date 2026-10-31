@@ -16,6 +16,8 @@ namespace Ayr.Ui
         public readonly Color AccentText = Color.FromArgb(18, 18, 20);
         public readonly Color Track = Color.FromArgb(40, 43, 51);
         public readonly Color SegmentSelected = Color.FromArgb(44, 47, 56);
+        public readonly Color Positive = Color.FromArgb(98, 214, 140);
+        public readonly Color PositiveBackground = Color.FromArgb(22, 48, 33);
         public readonly Color NoticeBackground = Color.FromArgb(28, 18, 19);
         public readonly Color NoticeBorder = Color.FromArgb(110, 44, 40);
         public readonly Color CaptionHover = Color.FromArgb(60, Color.White);

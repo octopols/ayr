@@ -47,5 +47,8 @@ namespace Ayr.Apple
         public string Model => KnownModels.TryGetValue(ProductId, out string name) ? name : "Apple device (PID " + ProductId + ")";
 
         public bool IsSettling(TimeSpan settleTime) => LastArrival.HasValue && DateTime.Now - LastArrival.Value < settleTime;
+
+        /// <summary>The request lasts until the device is unplugged, so only one sent since its last arrival counts.</summary>
+        public bool FastChargeRequested => LastRequest.HasValue && LastArrival.HasValue && LastRequest.Value >= LastArrival.Value;
     }
 }

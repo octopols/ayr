@@ -20,9 +20,17 @@ namespace Ayr.Apple
 
         public DateTime? LastRequestFor(string instanceId) => Get(instanceId);
 
-        public void RecordRequest(DateTime when) => Set(LastRequestKey, when);
-
-        public void RecordRequestFor(string instanceId, DateTime when) => Set(instanceId, when);
+        public void Record(DateTime when, IEnumerable<string> instanceIds)
+        {
+            Dictionary<string, string> entries = _file.Read();
+            string stamp = when.ToString(TimeFormat, CultureInfo.InvariantCulture);
+            entries[LastRequestKey] = stamp;
+            foreach (string instanceId in instanceIds)
+            {
+                entries[instanceId] = stamp;
+            }
+            _file.Write(entries);
+        }
 
         private DateTime? Get(string key)
         {
@@ -32,13 +40,6 @@ namespace Ayr.Apple
                 return when;
             }
             return null;
-        }
-
-        private void Set(string key, DateTime when)
-        {
-            Dictionary<string, string> entries = _file.Read();
-            entries[key] = when.ToString(TimeFormat, CultureInfo.InvariantCulture);
-            _file.Write(entries);
         }
     }
 }

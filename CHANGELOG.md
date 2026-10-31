@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 (2026-11-01)
+
+- Apple fast charge shows each device's state: a green "Fast charging" badge once the request has been sent for the
+  current connection, which resets when the device is unplugged.
+- The toggle is now **Send automatically**: every device gets the request when plugged in, and switching it on also
+  sends to devices already connected. With it off, each device has its own **Send** button, greyed out with an
+  explanation once sent, while plugging in, or during the 5-minute gap between requests.
+- `ayrctl apple boost` is now `ayrctl apple send`, and refuses to resend to a device that already has the request.
+- Updates: **Check for updates** in Settings, and **Automatic updates** (on by default) that checks GitHub once a day,
+  verifies the download against its published SHA-256, installs it and restarts the tray with your settings.
+
 ## 0.1.0 (2026-11-01)
 
 First version.

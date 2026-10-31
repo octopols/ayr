@@ -1,67 +1,77 @@
 # Supported models
 
-Ayr writes to the embedded controller, so it only switches modes on models whose register layout has been verified.
-This page lists those models, explains what differs between models, and shows how to check yours safely and help add it.
+Ayr writes to the laptop's embedded controller, so it only changes modes on models that have been checked. This page
+lists them and shows how to check your own laptop safely.
+
+## Contents
+
+1. [Tested devices](#tested-devices)
+2. [Probably compatible](#probably-compatible)
+3. [Not supported yet](#not-supported-yet)
+4. [Check your laptop](#check-your-laptop)
+5. [Get your model added](#get-your-model-added)
+6. [Notes for AI](#notes-for-ai)
 
 ## Tested devices
 
-| Icon | Meaning |
-|---|---|
-| ✅ | Works, tested on this device |
-| 🧪 | Works, but only partly tested (see the note) |
-| ➖ | The device doesn't have this feature |
-| ❌ | The device has it, but Ayr doesn't support it yet |
+| Device | Board | Fan modes | Cooler Boost | Performance | GPU overclock | Apple fast charge | Start with Windows |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
+| MSI GF65 Thin 10SDR | MS-16W1 | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/partial.svg" width="16" alt="Partly tested"> ¹ | <img src="images/status/works.svg" width="16" alt="Works"> |
 
-| Device | Type | Board | Fan modes | Cooler Boost | Performance levels | GPU overclock | Apple fast charge | Start with Windows |
-|---|---|---|---|---|---|---|---|---|
-| MSI GF65 Thin 10SDR | Laptop | MS-16W1 | ✅ | ✅ | ✅ | ✅ | 🧪 ¹ | 🧪 ² |
+<img src="images/status/works.svg" width="12" alt=""> Works &nbsp;
+<img src="images/status/partial.svg" width="12" alt=""> Partly tested &nbsp;
+<img src="images/status/not-on-device.svg" width="12" alt=""> Device doesn't have it &nbsp;
+<img src="images/status/unsupported.svg" width="12" alt=""> Not supported by Ayr yet
 
-1. The request is sent and the system stays stable, but whether charging actually gets faster hasn't been measured yet.
-2. Restoring settings through a real sign-in after a reboot hasn't been tested yet.
+1. The request is sent and the PC stays stable, but nobody has measured yet whether charging gets faster.
 
-**MSI desktop motherboards** haven't been tested. Fan modes, Cooler Boost, performance levels and the GPU overclock are
-❌ on them: desktop fans are run by a different chip than the laptop embedded controller Ayr talks to. Apple fast charge
-doesn't depend on the board and might work, but nobody has tried it yet.
+**MSI desktop motherboards** are untested. Fans, Cooler Boost, performance and the GPU overclock are not supported on
+them, because desktop fans are run by a different chip. Apple fast charge doesn't depend on the board and may work.
 
-## Probably compatible, not yet verified
+## Probably compatible
 
-Other MSI laptops on the **v1 firmware path** (10th-gen Intel and earlier, see [how-it-works.md](how-it-works.md)) use
-the same WMI blocks and very likely the same registers. What can still differ:
+Other MSI laptops with 10th-gen Intel or older use the same firmware interface (the "v1 path" in
+[how-it-works.md](how-it-works.md)) and most likely the same registers. What can still differ:
 
 | What | Why it matters |
 |---|---|
-| The stock fan curve | Auto writes it back, so a wrong curve gives wrong fan speeds in Auto until the right one is written again (MSI Center's Auto does that) |
-| The EC RAM address | Cooler Boost is written there |
-| The performance-mode values | Wrong values could select a different power profile |
-| The GPU offset limits | They depend on the GPU model |
+| Stock fan curve | Auto writes it back, so a wrong curve gives wrong fan speeds in Auto |
+| EC RAM address | Cooler Boost is written there |
+| Performance-mode values | A wrong value could pick a different power profile |
+| GPU offset limits | They depend on the GPU |
 
-Until a model is verified, treat Ayr as **read-only** on it: `ayrctl status` and `ayrctl probe` only read.
+Until a model is checked, use only the read-only commands on it.
 
 ## Not supported yet
 
-- **v2 firmware** (11th-gen Intel / Tiger Lake and newer). It uses different WMI methods that Ayr doesn't implement yet.
-- **AMD-based models:** which path they use hasn't been checked. A probe report would answer it.
-- **AMD Radeon GPUs.** GPU offsets go through NVIDIA's NVAPI only. Fans and performance don't depend on the GPU.
+- **11th-gen Intel and newer:** different firmware methods that Ayr doesn't implement yet.
+- **AMD laptops:** not checked. A probe report would tell.
+- **AMD Radeon GPUs:** no GPU overclock (it uses NVIDIA's API). Fans and performance still work.
 
-## Check your laptop (read-only)
+## Check your laptop
 
-1. If MSI Center or Dragon Center is installed, note the performance level and fan mode it shows.
-2. Download Ayr and run, from a terminal in its folder:
+Both commands only read:
 
-   ```powershell
-   .\ayrctl.exe probe
-   .\ayrctl.exe status
-   ```
+```powershell
+.\ayrctl.exe probe
+.\ayrctl.exe status
+```
 
-   Neither command writes anything.
-3. Compare with [how-it-works.md](how-it-works.md):
-   - `MSI_System` should have about 21 entries, with `[7]` matching one of `196` (Turbo), `192` (High), `193` (Medium)
-     or `194` (Low) for the level MSI Center shows.
-   - `MSI_CPU` and `MSI_VGA` entries 11-17 should be a rising fan curve.
-   - `EC 0x98` should change bit 7 when you press the Cooler Boost key.
-   - `EC 0xF2` and `EC 0xF4` should equal `MSI_System[7]` and `MSI_System[9]`.
+Compare the output with what MSI Center showed:
 
-## Help add your model
+- `MSI_System[7]` is `196` Turbo, `192` High, `193` Medium or `194` Low, matching MSI Center's level.
+- `MSI_CPU` and `MSI_VGA` entries 11-17 form a rising fan curve.
+- `EC 0x98` bit 7 changes when you press the Cooler Boost key.
+- `EC 0xF2` and `EC 0xF4` equal `MSI_System[7]` and `MSI_System[9]`.
 
-Open a **Model report** issue with your model, BIOS version and the two outputs above. If everything matches, the model
-can be added to the verified list after someone with that laptop runs `scripts/e2e-test.ps1`.
+## Get your model added
+
+Open a **Model report** issue with your model, BIOS version and both outputs. If they match, the model is added once
+someone with that laptop runs `scripts/e2e-test.ps1`.
+
+## Notes for AI
+
+**Decisions**
+- Start with Windows marked as working after a real reboot restored the settings at sign-in on the GF65 (2026-11-01).
+- Status icons are SVGs in `docs/images/status/`, not emoji, so they look the same everywhere. Use the same four in
+  both this table and the README's.

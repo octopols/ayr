@@ -55,11 +55,11 @@ namespace Ayr.Ui
             y += Scaled(46);
 
             var appleCard = AddAt(new Card(Theme), left, y, inner, Scaled(56));
-            _appleTitle = new TitleWithSubtitle(Theme, "Apple fast charge", "", Theme.BodyBold, Theme.Surface);
+            _appleTitle = new TitleWithSubtitle(Theme, "Auto fast charge", "", Theme.BodyBold, Theme.Surface);
             _appleTitle.SetBounds(Scaled(12), Scaled(10), inner - Scaled(70), Scaled(38));
             _appleToggle = new ToggleSwitch(Theme) { BackColor = Theme.Surface };
             _appleToggle.SetBounds(inner - Scaled(52), Scaled(17), Scaled(40), Scaled(22));
-            _appleToggle.Toggled += on => Apply(() => _backend.SetAppleFastCharge(on));
+            _appleToggle.Toggled += on => Apply(() => _backend.SetAppleAutoFastCharge(on));
             appleCard.Controls.Add(_appleTitle);
             appleCard.Controls.Add(_appleToggle);
             y += Scaled(68);
@@ -129,7 +129,7 @@ namespace Ayr.Ui
             {
                 if (error == null)
                 {
-                    _appleToggle.Checked = summary.FastChargeOn;
+                    _appleToggle.Checked = summary.Automatic;
                     _appleTitle.SetSubtitle(summary.Description);
                 }
             });

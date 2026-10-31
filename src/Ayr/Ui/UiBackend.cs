@@ -5,12 +5,13 @@ using Ayr.Agent;
 using Ayr.App;
 using Ayr.Apple;
 using Ayr.Controllers;
+using Ayr.Updates;
 
 namespace Ayr.Ui
 {
     /// <summary>
-    /// The windows' only path to the hardware. Work runs on a pool thread so windows never freeze, one call at a time
-    /// because the supervisor thread in this process uses the same hardware.
+    /// The windows' only path to the hardware and to updates. Work runs on a pool thread so windows never freeze; hardware
+    /// work runs one call at a time because the supervisor thread in this process uses the same hardware.
     /// </summary>
     public sealed class UiBackend
     {
@@ -18,7 +19,10 @@ namespace Ayr.Ui
         private readonly ModeService _modes;
         private readonly AppleChargeController _charger = new AppleChargeController();
         private readonly AutostartTask _autostart = new AutostartTask();
+        private readonly GitHubReleaseFeed _releases = new GitHubReleaseFeed();
+        private readonly UpdateInstaller _installer = new UpdateInstaller();
         private readonly object _oneCallAtATime = new object();
+        private readonly object _oneUpdateAtATime = new object();
 
         public UiBackend(HardwareContext hardware)
         {
@@ -28,39 +32,26 @@ namespace Ayr.Ui
 
         public event Action<ModeChange> ModeChanged;
 
-        /// <summary>Runs work off the UI thread and delivers its result, or its error, on the owner's thread.</summary>
-        public void Run<T>(Control owner, Func<T> work, Action<T, Exception> done)
-        {
-            ThreadPool.QueueUserWorkItem(state =>
-            {
-                T result = default(T);
-                Exception error = null;
-                try
-                {
-                    lock (_oneCallAtATime)
-                    {
-                        result = work();
-                    }
-                }
-                catch (Exception ex)
-                {
-                    error = ex;
-                }
-                Deliver(owner, () => done(result, error));
-            });
-        }
+        /// <summary>Raised on a pool thread once a new version is in place; the tray then restarts into it.</summary>
+        public event Action UpdateInstalled;
+
+        /// <summary>Runs hardware work off the UI thread and delivers its result, or its error, on the owner's thread.</summary>
+        public void Run<T>(Control owner, Func<T> work, Action<T, Exception> done) => RunOnPool(owner, work, done, _oneCallAtATime);
+
+        /// <summary>Like Run for update work, which only waits on the network and must not hold up hardware reads.</summary>
+        public void RunUpdate<T>(Control owner, Func<T> work, Action<T, Exception> done) => RunOnPool(owner, work, done, _oneUpdateAtATime);
 
         public LiveState ReadLive() =>
             new LiveState(_hardware.Fans.ReadMode(), _hardware.Performance.ReadLevel(), _hardware.Telemetry.Sample());
 
         public SlowState ReadSlow(bool includeAutostart) => new SlowState(
             DesiredState.Load(),
-            _charger.Inventory.List(includeDisconnected: false),
+            _charger.ConnectedStatuses(),
+            _charger.NextRequestAllowedAt,
             includeAutostart ? _autostart.IsInstalled : (bool?)null,
             MsiSoftware.IsMsiCenterRunning);
 
-        public AppleSummary ReadAppleSummary() =>
-            new AppleSummary(DesiredState.Load().AppleFastCharge, _charger.Inventory.ConnectedInstanceIds().Count);
+        public AppleSummary ReadAppleSummary() => new AppleSummary(DesiredState.Load().AppleAutoFastCharge, _charger.ConnectedStatuses());
 
         public string ApplyFan(FanMode mode)
         {
@@ -96,17 +87,28 @@ namespace Ayr.Ui
             return applied ? "GPU offsets applied: " + offsets : "GPU offsets saved for the next Turbo session";
         }
 
-        public string SetAppleFastCharge(bool on)
+        /// <summary>Switching it on also sends to devices already connected, rather than waiting for the next plug-in.</summary>
+        public string SetAppleAutoFastCharge(bool on)
         {
             _charger.SetAutomatic(on);
-            if (on)
+            if (!on)
             {
-                Supervisor.EnsureBackgroundInstance();
+                return "Automatic fast charge off";
             }
-            return on ? "Apple fast charge on" : "Apple fast charge off";
+            Supervisor.EnsureBackgroundInstance();
+            ChargeRequestResult sentNow = _charger.SendIfAnyReady();
+            return sentNow != null && sentNow.Sent ? sentNow.Message : "Automatic fast charge on";
         }
 
-        public string SendAppleFastChargeNow() => _charger.SendForConnected().Message;
+        public string SendAppleFastCharge()
+        {
+            ChargeRequestResult result = _charger.SendForConnected();
+            if (!result.Sent)
+            {
+                throw new InvalidOperationException(result.Message);
+            }
+            return result.Message;
+        }
 
         public string SetAutostart(bool on)
         {
@@ -117,6 +119,56 @@ namespace Ayr.Ui
             }
             _autostart.Remove();
             return "Login task removed";
+        }
+
+        public string SetAutoUpdate(bool on)
+        {
+            DesiredState.Update(state => state.AutoUpdate = on);
+            ActivityLog.Write("automatic updates " + (on ? "on" : "off"));
+            return on ? "Automatic updates on" : "Automatic updates off";
+        }
+
+        /// <summary>The newer release, or null when this is the latest.</summary>
+        public ReleaseInfo FindUpdate() => _releases.FindNewerThan(AppVersion.Current);
+
+        public string InstallUpdate(ReleaseInfo release)
+        {
+            _installer.Install(release);
+            UpdateInstalled?.Invoke();
+            return "Updated to " + release.Version;
+        }
+
+        /// <summary>Installs the latest release if it is newer; returns its version, or null when already up to date.</summary>
+        public Version InstallUpdateIfAvailable()
+        {
+            ReleaseInfo release = FindUpdate();
+            if (release == null)
+            {
+                return null;
+            }
+            InstallUpdate(release);
+            return release.Version;
+        }
+
+        private static void RunOnPool<T>(Control owner, Func<T> work, Action<T, Exception> done, object exclusive)
+        {
+            ThreadPool.QueueUserWorkItem(state =>
+            {
+                T result = default(T);
+                Exception error = null;
+                try
+                {
+                    lock (exclusive)
+                    {
+                        result = work();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    error = ex;
+                }
+                Deliver(owner, () => done(result, error));
+            });
         }
 
         private static void Deliver(Control owner, Action callback)

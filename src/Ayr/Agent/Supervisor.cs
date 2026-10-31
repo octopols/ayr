@@ -14,7 +14,7 @@ namespace Ayr.Agent
     ///  - Silent: back to Auto if CPU or GPU reaches the critical temperature, or if temperatures cannot be read.
     ///  - Turbo: GPU offsets reapplied after a driver reset, since NVAPI offsets do not survive one.
     ///  - Resume from sleep: the saved fan mode and performance level reapplied.
-    ///  - Apple fast charge: one request when an Apple device is plugged in.
+    ///  - Automatic Apple fast charge: one request for each Apple device per connection.
     /// It never "corrects" a mode changed elsewhere. A sentinel process forces Auto if this one dies while Silent.
     /// </summary>
     public sealed class Supervisor : IDisposable
@@ -118,7 +118,7 @@ namespace Ayr.Agent
                         ReapplyAfterResume(desired);
                     }
                     GuardSilent(desired);
-                    if (desired.AppleFastCharge)
+                    if (desired.AppleAutoFastCharge)
                     {
                         WatchApple();
                     }
