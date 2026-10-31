@@ -22,7 +22,6 @@ namespace Ayr.Ui
         private const int CardPadding = 14;
         private const int ScreenMargin = 40;
         private const int MaxDeviceRows = 3;
-        private const string ReadErrorPrefix = "Couldn't read the hardware: ";
         private const string MsiCenterWarning = "MSI Center is running and overrides Ayr's settings after sleep. Uninstall MSI Center.";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(15);
@@ -35,7 +34,7 @@ namespace Ayr.Ui
         private readonly HeaderBand _header;
         private readonly ScrollViewport _viewport;
         private readonly Panel _page;
-        private readonly ErrorBar _error;
+        private readonly NoticeBar _banner;
         private readonly TitleWithSubtitle _statusTitle;
         private readonly Card _statusCard;
         private readonly MetricCell[] _metrics;
@@ -61,7 +60,10 @@ namespace Ayr.Ui
 
         private bool _slidersInitialized;
         private bool _liveInFlight, _slowInFlight, _busy;
-        private string _errorMessage;
+        private string _applyError;
+        private string _readError;
+        private bool _msiCenterRunning;
+        private string _bannerText;
         private int _visibleDeviceRows = 1;
         private bool _chargeNowVisible;
 
@@ -79,7 +81,7 @@ namespace Ayr.Ui
             _page = new Panel { BackColor = Theme.Background };
             _viewport.Controls.Add(_page);
 
-            _error = AddToPage(new ErrorBar(Theme) { Visible = false });
+            _banner = AddToPage(new NoticeBar(Theme) { Visible = false });
 
             _statusTitle = AddToPage(Section("Status"));
             _statusCard = AddToPage(new Card(Theme));
@@ -192,7 +194,8 @@ namespace Ayr.Ui
             _backend.Run(this, change, (message, error) =>
             {
                 SetBusy(false);
-                ShowError(error == null ? null : "Couldn't apply that change: " + error.Message);
+                _applyError = error == null ? null : "Couldn't apply that change: " + error.Message;
+                UpdateBanner();
                 RefreshLive();
                 RefreshSlow(rereadAutostart);
             });
@@ -209,14 +212,16 @@ namespace Ayr.Ui
             UseWaitCursor = busy;
         }
 
-        private void ShowError(string message)
+        // One line at the top of the window: a failed change matters most, then unreadable hardware, then MSI Center.
+        private void UpdateBanner()
         {
-            if (message == _errorMessage)
+            string text = _applyError ?? _readError ?? (_msiCenterRunning ? MsiCenterWarning : null);
+            if (text == _bannerText)
             {
                 return;
             }
-            _errorMessage = message;
-            _error.Text = message ?? "";
+            _bannerText = text;
+            _banner.Text = text ?? "";
             Relayout();
         }
 
@@ -230,12 +235,12 @@ namespace Ayr.Ui
             _backend.Run(this, _backend.ReadLive, (live, error) =>
             {
                 _liveInFlight = false;
-                if (error != null)
+                _readError = error == null ? null : "Couldn't read the hardware: " + error.Message;
+                UpdateBanner();
+                if (error == null)
                 {
-                    ShowError(ReadErrorPrefix + error.Message);
-                    return;
+                    ShowLive(live);
                 }
-                ShowLive(live);
             });
         }
 
@@ -264,11 +269,6 @@ namespace Ayr.Ui
             _gpuFan.SetValue(live.Telemetry.GpuFanRpm.ToString("N0") + " RPM");
             _fan.SelectedIndex = FanController.SelectableModes.IndexOf(live.Fan);
             _performance.SelectedIndex = PerformanceController.SelectableLevels.IndexOf(live.Performance);
-            bool readErrorShown = _errorMessage != null && _errorMessage.StartsWith(ReadErrorPrefix, StringComparison.Ordinal);
-            if (readErrorShown)
-            {
-                ShowError(null);
-            }
         }
 
         private void ShowSlow(SlowState slow)
@@ -286,19 +286,8 @@ namespace Ayr.Ui
                 _autostartToggle.Checked = slow.AutostartOn.Value;
             }
             ShowAppleDevices(slow.AppleDevices);
-            ShowMsiCenterWarning(slow.MsiCenterRunning);
-        }
-
-        private void ShowMsiCenterWarning(bool msiCenterRunning)
-        {
-            if (msiCenterRunning)
-            {
-                ShowError(MsiCenterWarning);
-            }
-            else if (_errorMessage == MsiCenterWarning)
-            {
-                ShowError(null);
-            }
+            _msiCenterRunning = slow.MsiCenterRunning;
+            UpdateBanner();
         }
 
         private void ShowAppleDevices(IReadOnlyList<AppleDevice> devices)
@@ -355,11 +344,11 @@ namespace Ayr.Ui
             int cardInner = inner - 2 * Scaled(CardPadding);
             int y = Scaled(12);
             _page.SuspendLayout();
-            bool errorShown = _errorMessage != null;
-            _error.Visible = errorShown;
-            if (errorShown)
+            bool bannerShown = _bannerText != null;
+            _banner.Visible = bannerShown;
+            if (bannerShown)
             {
-                Stack(_error, left, inner, Scaled(38), Scaled(14), ref y);
+                Stack(_banner, left, inner, Scaled(38), Scaled(14), ref y);
             }
             LayoutStatus(left, inner, ref y);
             Stack(_fanTitle, left, inner, Scaled(24), Scaled(6), ref y);

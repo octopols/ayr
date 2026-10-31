@@ -27,22 +27,22 @@ namespace Ayr.Hardware
             {
                 return FirmwareInterfaceState.NotAnMsiLaptop;
             }
-            string definitions = VendorLibrary.FirmwareInterface.Locate();
-            using (RegistryKey wmiAcpi = Registry.LocalMachine.OpenSubKey(WmiAcpiKey, writable: true))
+            string definitionsPath = VendorLibrary.FirmwareInterface.Locate();
+            using (RegistryKey wmiAcpi = OpenWmiAcpiKey())
             {
-                wmiAcpi.SetValue(MofImagePath, definitions, RegistryValueKind.ExpandString);
+                wmiAcpi.SetValue(MofImagePath, definitionsPath, RegistryValueKind.ExpandString);
             }
-            ActivityLog.Write("registered " + definitions + " as wmiacpi's MOF image; restart required");
+            ActivityLog.Write("registered " + definitionsPath + " as wmiacpi's MOF image; restart required");
             return FirmwareInterfaceState.RestartRequired;
         }
 
         /// <summary>Removes the registration if it points at Ayr's own copy.</summary>
         public static bool RemoveIfOwned()
         {
-            using (RegistryKey wmiAcpi = Registry.LocalMachine.OpenSubKey(WmiAcpiKey, writable: true))
+            using (RegistryKey wmiAcpi = OpenWmiAcpiKey())
             {
-                string current = wmiAcpi?.GetValue(MofImagePath, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
-                if (current == null || current.IndexOf(AppPaths.VendorDirectory, StringComparison.OrdinalIgnoreCase) < 0)
+                string current = wmiAcpi.GetValue(MofImagePath, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                if (!AppPaths.PointsIntoVendorDirectory(current))
                 {
                     return false;
                 }
@@ -51,6 +51,10 @@ namespace Ayr.Hardware
                 return true;
             }
         }
+
+        private static RegistryKey OpenWmiAcpiKey() =>
+            Registry.LocalMachine.OpenSubKey(WmiAcpiKey, writable: true)
+                ?? throw new InvalidOperationException("Windows' wmiacpi driver isn't registered on this PC.");
 
         private static bool ClassesExist()
         {

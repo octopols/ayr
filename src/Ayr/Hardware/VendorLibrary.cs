@@ -32,7 +32,7 @@ namespace Ayr.Hardware
             _expectedSigner = expectedSigner;
         }
 
-        public string FilePath => Path.Combine(AppPaths.VendorDirectory, _fileName);
+        private string FilePath => Path.Combine(AppPaths.VendorDirectory, _fileName);
 
         /// <summary>The verified path, or an error saying the installation is incomplete or has been tampered with.</summary>
         public string Locate()

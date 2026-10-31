@@ -141,8 +141,7 @@ namespace Ayr.Hardware
         {
             using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + ServiceName))
             {
-                string imagePath = key?.GetValue("ImagePath") as string;
-                return imagePath != null && imagePath.IndexOf(AppPaths.VendorDirectory, StringComparison.OrdinalIgnoreCase) >= 0;
+                return AppPaths.PointsIntoVendorDirectory(key?.GetValue("ImagePath") as string);
             }
         }
     }

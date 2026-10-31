@@ -1,3 +1,4 @@
+using System;
 using System.Windows.Forms;
 using Ayr.App;
 using Ayr.Controllers;
@@ -64,9 +65,11 @@ namespace Ayr.Ui
                 case FirmwareInterfaceState.RestartRequired:
                     ShowMessage("Ayr has installed MSI's firmware interface. Restart Windows to finish setting it up.", MessageBoxIcon.Information);
                     return false;
-                default:
+                case FirmwareInterfaceState.NotAnMsiLaptop:
                     ShowMessage("Ayr only works on MSI laptops: this PC doesn't report MSI as its maker.", MessageBoxIcon.Warning);
                     return false;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(FirmwareInterfaceState));
             }
         }
 

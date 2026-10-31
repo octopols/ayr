@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Reflection;
 
@@ -20,6 +21,10 @@ namespace Ayr.App
         }
 
         public static string VendorDirectory => Path.Combine(ExecutableDirectory, "vendor");
+
+        /// <summary>Whether a registered path (possibly with a "\??\" prefix) points into Ayr's own vendor folder.</summary>
+        public static bool PointsIntoVendorDirectory(string registeredPath) =>
+            registeredPath != null && registeredPath.IndexOf(VendorDirectory, StringComparison.OrdinalIgnoreCase) >= 0;
 
         public static string StateFile => Path.Combine(DataDirectory, "state.ini");
 

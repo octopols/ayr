@@ -4,12 +4,12 @@ using System.Windows.Forms;
 
 namespace Ayr.Ui.Controls
 {
-    public sealed class ErrorBar : ThemedControl
+    public sealed class NoticeBar : ThemedControl
     {
         private const float CornerRadius = 6;
         private const int TextPadding = 14;
 
-        public ErrorBar(Theme theme) : base(theme)
+        public NoticeBar(Theme theme) : base(theme)
         {
         }
 
@@ -19,8 +19,8 @@ namespace Ayr.Ui.Controls
             Smooth(graphics);
             graphics.Clear(BackColor);
             var bounds = new RectangleF(0.5f, 0.5f, Width - 1.5f, Height - 1.5f);
-            RoundedRectangle.Fill(graphics, bounds, CornerRadius, Theme.ErrorBackground);
-            RoundedRectangle.Outline(graphics, bounds, CornerRadius, Theme.ErrorBorder);
+            RoundedRectangle.Fill(graphics, bounds, CornerRadius, Theme.NoticeBackground);
+            RoundedRectangle.Outline(graphics, bounds, CornerRadius, Theme.NoticeBorder);
             var textBounds = new Rectangle(TextPadding, 0, Width - 2 * TextPadding, Height);
             TextRenderer.DrawText(graphics, Text, Theme.Body, textBounds, Theme.Accent, TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }

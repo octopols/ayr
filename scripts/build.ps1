@@ -1,7 +1,7 @@
 # Builds Ayr: two x64 .NET Framework 4.8 executables from the same sources.
 #   Ayr.exe      windowless tray app (the Start menu entry); with arguments it runs the same commands as ayrctl
 #   ayrctl.exe   console command line
-#   vendor      MSI's signed drivers and libraries, copied from the repository's vendor folder
+#   vendor\      MSI's signed drivers and libraries, copied from the repository's vendor folder
 # x64 because MSI's GPU overclock library (GInf.dll) is 64-bit and is loaded in-process.
 # .NET Framework because it ships with Windows: nothing to install, and the app stays portable.
 [CmdletBinding()]
