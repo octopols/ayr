@@ -1,0 +1,5 @@
+# Windows-only project: keep CRLF in the working tree, normalise to LF in the repository.
+* text=auto eol=crlf
+
+*.ico binary
+*.png binary

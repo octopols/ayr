@@ -1,0 +1,20 @@
+name: Feature request
+description: Suggest something Ayr should do
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the problem, not just the solution. Ayr's first priority is staying lightweight.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like Ayr to do?
+  - type: input
+    id: model
+    attributes:
+      label: Laptop model
+      description: Only needed if the request is about a specific model

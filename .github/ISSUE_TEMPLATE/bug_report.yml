@@ -1,0 +1,52 @@
+name: Bug report
+description: Something doesn't work or behaves unexpectedly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ayr writes to your laptop's embedded controller, so the exact hardware matters. Please fill in every field.
+  - type: input
+    id: model
+    attributes:
+      label: Laptop model
+      description: Full model name, e.g. "MSI GF65 Thin 10SDR (MS-16W1)"
+    validations:
+      required: true
+  - type: input
+    id: bios
+    attributes:
+      label: BIOS and EC version
+      description: The BIOS version from System Information, and the "ayrctl probe" output if you can run it
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: e.g. Windows 11 25H2 (26200)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Ayr version
+      description: Right-click Ayr.exe > Properties > Details
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: The last lines of data\events.log next to Ayr.exe, and the output of "ayrctl status"
+      render: text

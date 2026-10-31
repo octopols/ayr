@@ -1,0 +1,15 @@
+# Build output (scripts/build.ps1)
+bin/
+
+# Runtime data written next to the executables
+data/
+
+# Copies of a running exe set aside by scripts/deploy.ps1
+*.old
+
+# Editors and OS
+.vs/
+.vscode/
+*.user
+Thumbs.db
+desktop.ini
