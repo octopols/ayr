@@ -37,6 +37,10 @@ namespace Ayr.Cli
             output.WriteLine("Turbo OC     : {0} (limits 0-{1} / 0-{2})", desired.TurboOffsets, GpuOffsets.MaxCoreMhz, GpuOffsets.MaxMemoryMhz);
             output.WriteLine("Saved choice : fan {0}, perf {1}; supervisor {2}",
                 Lower(desired.Fan), Lower(desired.Performance), Supervisor.IsRunning ? "running" : "not running");
+            if (MsiSoftware.IsMsiCenterRunning)
+            {
+                output.WriteLine("Warning      : MSI Center is running and overrides these settings after sleep; uninstall it.");
+            }
         }
 
         private void WriteGpuOffsets(TextWriter output)

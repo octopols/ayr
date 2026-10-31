@@ -45,7 +45,7 @@ Until a model is verified, treat Ayr as **read-only** on it: `ayrctl status` and
 
 ## Check your laptop (read-only)
 
-1. Keep MSI Center or Dragon Center installed for now, and note the performance level and fan mode it shows.
+1. If MSI Center or Dragon Center is installed, note the performance level and fan mode it shows.
 2. Download Ayr and run, from a terminal in its folder:
 
    ```powershell

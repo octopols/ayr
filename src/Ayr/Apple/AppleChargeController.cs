@@ -30,10 +30,6 @@ namespace Ayr.Apple
         /// </summary>
         public ChargeRequestResult SendForConnected()
         {
-            if (!Driver.IsAvailable)
-            {
-                return ChargeRequestResult.NotSent("Not sent: MSI Super Charger's helper and driver are not available; install Super Charger once so Ayr can copy them.");
-            }
             List<AppleDevice> devices = Inventory.List(includeDisconnected: false).Where(device => AppleChargeDriver.SupportsHub(device.HubService)).ToList();
             if (devices.Count == 0)
             {

@@ -23,6 +23,10 @@ foreach ($file in 'Ayr.exe', 'ayrctl.exe') {
         Write-Host "$file was in use; previous copy moved to $(Split-Path $aside -Leaf)"
     }
 }
+# A loaded driver's file can't be replaced, and the shipped files are identical anyway, so only missing ones are copied.
+$vendor = Join-Path $Target 'vendor'
+New-Item -ItemType Directory -Force $vendor | Out-Null
+Get-ChildItem (Join-Path $bin 'vendor') | Where-Object { -not (Test-Path (Join-Path $vendor $_.Name)) } | Copy-Item -Destination $vendor
 
 $shell = New-Object -ComObject WScript.Shell
 $link = $shell.CreateShortcut($Shortcut)

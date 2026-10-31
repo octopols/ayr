@@ -1,4 +1,3 @@
-using Ayr.App;
 using Ayr.Hardware;
 
 namespace Ayr.Controllers
@@ -8,8 +7,7 @@ namespace Ayr.Controllers
         public HardwareContext()
         {
             Wmi = new WmiBlockClient();
-            // Unelevated processes cannot load the WINIO library, so they go through MSI Foundation Service's pipe.
-            Ec = Elevation.IsElevated ? (EcMemory)new KernCoreEcMemory() : new FoundationServiceEcMemory();
+            Ec = new EcMemory();
             Fans = new FanController(Wmi, Ec);
             Performance = new PerformanceController(Wmi);
             Telemetry = new Telemetry(Wmi);

@@ -53,28 +53,44 @@ keyboard toggles the same bit in hardware, and Ayr never overrides it.
 ### Reaching EC RAM
 
 Cooler Boost has no WMI block, so Ayr writes EC RAM directly. On v1 firmware, EC RAM is memory-mapped at a physical
-address (*reference*: `0xFC000800`). The only safe way to touch it is a driver that is already installed and running, and
-MSI ships one: the WINIO driver (`KernCoreLib64.sys`) that MSI Foundation Service uses. Ayr reaches it two ways:
-
-- **Elevated:** in-process through MSI's `KernCoreLib64.dll`, the same calls MSI Foundation Service makes.
-- **Not elevated:** through MSI Foundation Service's named pipe `MSI_SERVICE_2`, which any signed-in user may use.
-
-Both only support 32-bit access, so writing one byte reads the surrounding four, changes one, and writes them back, as
-MSI's own code does.
+address (*reference*: `0xFC000800`), which only a kernel driver can reach. Ayr uses the one MSI uses: the WINIO driver
+(`KernCoreLib64.sys`) with its library `KernCoreLib64.dll`, a rebranded copy of the open-source WinIo. The library only
+does 32-bit access, so writing one byte reads the surrounding four, changes one, and writes them back, as MSI's own code
+does.
 
 ### GPU overclock
 
-In Turbo, MSI Center applies GPU core and memory clock offsets through `GInf.dll`, MSI's wrapper around NVIDIA's NVAPI,
-which ships with MSI Foundation Service. Ayr calls the same library. Offsets are in MHz, are lost on reboot or a driver
-reset, and are limited to the range MSI Center allows for the GPU (*reference*: GTX 1660 Ti, core 0-180, memory 0-500).
+In Turbo, MSI Center applies GPU core and memory clock offsets through `GInf.dll`, MSI's wrapper around NVIDIA's NVAPI.
+Ayr calls the same library. Offsets are in MHz, are lost on reboot or a driver reset, and are limited to the range MSI
+Center allows for the GPU (*reference*: GTX 1660 Ti, core 0-180, memory 0-500). Without an NVIDIA GPU, performance levels
+still work and only the offsets are unavailable.
+
+## The MSI files Ayr ships
+
+Ayr needs no MSI software installed. Six unmodified, signed MSI files ship in its `vendor\` folder, and each one's
+signature is verified by Windows before use:
+
+| File | Used for |
+|---|---|
+| `msiapcfg.dll` | Defines the `MSI_*` WMI classes. If a laptop lacks them, Ayr registers this file with Windows' `wmiacpi` driver and asks for one restart. |
+| `KernCoreLib64.dll`, `KernCoreLib64.sys` | EC access for Cooler Boost (the WINIO driver). |
+| `GInf.dll` | GPU offsets. |
+| `ipadchg2.exe`, `ipadtst2_64.sys` | Apple fast charge; see [apple-fast-charge.md](apple-fast-charge.md). |
+
+Each driver is registered as a demand-start service under the name MSI uses, so a laptop that still has MSI's software
+keeps working, and it is started only when a feature first needs it. Both drivers let whoever opens them do privileged
+things (WINIO maps physical memory and writes I/O ports), so Ayr restricts their devices to SYSTEM and Administrators
+whenever it starts them or finds them running. Ayr never stops a driver while in use; `ayrctl uninstall` removes Ayr's
+driver entries, and the drivers unload at the next restart.
 
 ## What MSI's services did, and what replaces them
 
 | MSI component | What it did for fans and performance | In Ayr |
 |---|---|---|
 | MSI Center / Dragon Center UI | Sent mode changes to MSI's central service | Ayr's tray and window |
-| MSI Central Service (MSI SDK) | Applied scenarios; re-applied its own scenario after every resume | Ayr's background guard re-applies *your* settings after resume |
-| MSI Foundation Service | Sets a firmware handshake at boot; EC access pipe; `GInf.dll` | Ayr sets the same handshake (`MSI_Software[0] = 1`) and uses the libraries directly. **Keep it installed.** |
+| MSI Central Service (MSI SDK) | Applied scenarios; re-applied its own scenario after every resume | Ayr's background guard re-applies *your* settings after resume. Ayr warns while this service is running. |
+| MSI Foundation Service | Set a firmware handshake at boot; loaded WINIO; shipped `GInf.dll` | Ayr sets the same handshake (`MSI_Software[0] = 1`) and uses its own copies of the files |
+| MSI Super Charger | Sent the Apple fast-charge request | Ayr sends the same request with its own copies, and refuses to while Super Charger's service is running |
 | Micro Star SCM | Fn-key handling and a WMI proxy | Not needed for fans and performance |
 
 ## Safety design
@@ -86,8 +102,8 @@ reset, and are limited to the range MSI Center allows for the GPU (*reference*: 
   the guard dies, even if it is killed. A failed change out of Silent lands on Auto rather than back on Silent.
 - **Allow-listed writes.** Only `MSI_CPU`, `MSI_VGA`, `MSI_System`, the handshake byte in `MSI_Software`, and the
   Cooler Boost register. Battery, device and power blocks are read-only, and Ayr never writes the BIOS or SMBus.
-- **No new drivers.** Ayr uses `wmiacpi.sys` (part of Windows) and MSI's already-running WINIO driver. That is also what
-  keeps it out of the way of kernel anti-cheat.
+- **Only MSI's signed drivers, locked down.** Ayr loads nothing but MSI's own two drivers, the same ones MSI Center loads,
+  and restricts them to administrators.
 - **Never fights other changes.** If something else changes a mode, for example the Cooler Boost key, Ayr leaves it.
 
 ## Testing

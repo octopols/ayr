@@ -23,6 +23,7 @@ namespace Ayr.Ui
         private const int ScreenMargin = 40;
         private const int MaxDeviceRows = 3;
         private const string ReadErrorPrefix = "Couldn't read the hardware: ";
+        private const string MsiCenterWarning = "MSI Center is running and overrides Ayr's settings after sleep. Uninstall MSI Center.";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(15);
 
@@ -58,7 +59,7 @@ namespace Ayr.Ui
         private readonly TitleWithSubtitle _autostartRow;
         private readonly ToggleSwitch _autostartToggle;
 
-        private SlowState _slow;
+        private bool _slidersInitialized;
         private bool _liveInFlight, _slowInFlight, _busy;
         private string _errorMessage;
         private int _visibleDeviceRows = 1;
@@ -200,11 +201,11 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            foreach (Control input in new Control[] { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _autostartToggle })
+            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _appleToggle, _chargeNow, _autostartToggle };
+            foreach (Control input in inputs)
             {
                 input.Enabled = !busy;
             }
-            UpdateAppleInputs();
             UseWaitCursor = busy;
         }
 
@@ -272,31 +273,39 @@ namespace Ayr.Ui
 
         private void ShowSlow(SlowState slow)
         {
-            if (_slow == null)
+            if (!_slidersInitialized)
             {
                 // The sliders start at the saved Turbo offsets and are then left to the user.
                 _coreOffset.Value = slow.Desired.TurboOffsets.CoreMhz;
                 _memoryOffset.Value = slow.Desired.TurboOffsets.MemoryMhz;
+                _slidersInitialized = true;
             }
-            _slow = slow;
             _appleToggle.Checked = slow.Desired.AppleFastCharge;
             if (slow.AutostartOn.HasValue)
             {
                 _autostartToggle.Checked = slow.AutostartOn.Value;
             }
-            ShowAppleDevices(slow);
-            UpdateAppleInputs();
+            ShowAppleDevices(slow.AppleDevices);
+            ShowMsiCenterWarning(slow.MsiCenterRunning);
         }
 
-        private void ShowAppleDevices(SlowState slow)
+        private void ShowMsiCenterWarning(bool msiCenterRunning)
         {
-            IReadOnlyList<AppleDevice> devices = slow.AppleDevices;
+            if (msiCenterRunning)
+            {
+                ShowError(MsiCenterWarning);
+            }
+            else if (_errorMessage == MsiCenterWarning)
+            {
+                ShowError(null);
+            }
+        }
+
+        private void ShowAppleDevices(IReadOnlyList<AppleDevice> devices)
+        {
             if (devices.Count == 0)
             {
-                _deviceRows[0].SetDevice(
-                    slow.AppleChargerInstalled ? "No device connected" : "MSI Super Charger is not installed",
-                    slow.AppleChargerInstalled ? "Plug in an iPhone or iPad" : "Install it to enable fast charging",
-                    connected: false);
+                _deviceRows[0].SetDevice("No device connected", "Plug in an iPhone or iPad", connected: false);
             }
             for (int row = 0; row < Math.Min(devices.Count, MaxDeviceRows); row++)
             {
@@ -305,20 +314,13 @@ namespace Ayr.Ui
                 _deviceRows[row].SetDevice(device.Model, detail, connected: true);
             }
             int visibleRows = Math.Max(1, Math.Min(MaxDeviceRows, devices.Count));
-            bool chargeNowVisible = slow.AppleChargerInstalled && devices.Count > 0;
+            bool chargeNowVisible = devices.Count > 0;
             if (visibleRows != _visibleDeviceRows || chargeNowVisible != _chargeNowVisible)
             {
                 _visibleDeviceRows = visibleRows;
                 _chargeNowVisible = chargeNowVisible;
                 Relayout();
             }
-        }
-
-        private void UpdateAppleInputs()
-        {
-            bool installed = _slow != null && _slow.AppleChargerInstalled;
-            _appleToggle.Enabled = installed && !_busy;
-            _chargeNow.Enabled = installed && !_busy;
         }
 
         private void Relayout()

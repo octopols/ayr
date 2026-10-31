@@ -61,10 +61,9 @@ namespace Ayr.Hardware
             return instances;
         }
 
-        // The MSI_* classes come from MSI's msiapcfg.dll (registered as wmiacpi's MOF), which MSI's drivers install.
         private static InvalidOperationException MissingFirmwareInterface(WmiBlock block, Exception cause) =>
-            new InvalidOperationException("The MSI firmware interface (" + block + ") isn't available on this PC. Ayr needs an MSI "
-                + "laptop with MSI's system drivers installed (they come with MSI Center).", cause);
+            new InvalidOperationException("MSI's firmware interface (" + block + ") isn't available. Start the Ayr tray app once to "
+                + "set it up, then restart Windows. Ayr only works on MSI laptops.", cause);
 
         private static byte ReadPayload(ManagementObject instance) =>
             (byte)(Convert.ToInt32(instance[PayloadProperty(instance)], CultureInfo.InvariantCulture) & 0xFF);

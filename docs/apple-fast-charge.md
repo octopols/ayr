@@ -20,8 +20,9 @@ chip and does nothing on laptops.
 
 ## How Ayr uses it
 
-- Ayr runs MSI's unmodified `ipadchg2.exe` from Super Charger's install folder, exactly as Super Charger's service did.
-  Super Charger must be installed; Ayr bundles none of its files.
+- Ayr ships MSI's unmodified `ipadchg2.exe` and `ipadtst2_64.sys`, so Super Charger doesn't need to be installed. Ayr
+  starts the driver itself and restricts it to administrators, then runs MSI's helper to send the request.
+- While Super Charger's own service is running, Ayr sends nothing: two senders could put requests seconds apart.
 - One request per plug-in, sent 15 seconds after the device connects, once USB enumeration has settled.
 - At most one request every 5 minutes, system-wide, which was Super Charger's own cadence.
 - **The driver is never stopped.** It stays loaded until the next reboot, as it did with Super Charger.

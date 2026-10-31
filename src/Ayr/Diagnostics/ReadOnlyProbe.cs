@@ -30,7 +30,7 @@ namespace Ayr.Diagnostics
 
         private void WriteEcRegisters()
         {
-            _output.WriteLine("=== EC RAM via {0} (read-only) ===", _hardware.Ec.Description);
+            _output.WriteLine("=== EC RAM via KernCoreLib (WINIO driver) (read-only) ===");
             foreach (byte register in EcRegisters)
             {
                 try

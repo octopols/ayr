@@ -55,9 +55,9 @@ namespace Ayr.Ui
 
         public SlowState ReadSlow(bool includeAutostart) => new SlowState(
             DesiredState.Load(),
-            _charger.Driver.IsAvailable,
             _charger.Inventory.List(includeDisconnected: false),
-            includeAutostart ? _autostart.IsInstalled : (bool?)null);
+            includeAutostart ? _autostart.IsInstalled : (bool?)null,
+            MsiSoftware.IsMsiCenterRunning);
 
         public AppleSummary ReadAppleSummary() =>
             new AppleSummary(DesiredState.Load().AppleFastCharge, _charger.Inventory.ConnectedInstanceIds().Count);

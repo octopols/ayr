@@ -274,6 +274,10 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     _output.WriteLine("Removed the {0} driver entry; the driver unloads at the next restart.", driver.ServiceName);
                 }
             }
+            if (FirmwareInterface.RemoveIfOwned())
+            {
+                _output.WriteLine("Removed Ayr's registration of MSI's firmware interface.");
+            }
             _output.WriteLine("Exit the tray, then delete this folder: {0}", AppPaths.ExecutableDirectory);
             return ExitCode.Success;
         }

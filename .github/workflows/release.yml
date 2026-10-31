@@ -30,7 +30,7 @@ jobs:
         shell: pwsh
         run: |
           $zip = "Ayr-${{ steps.version.outputs.number }}-win-x64.zip"
-          Compress-Archive -Path bin/Ayr.exe, bin/ayrctl.exe -DestinationPath $zip
+          Compress-Archive -Path bin/Ayr.exe, bin/ayrctl.exe, bin/vendor -DestinationPath $zip
           (Get-FileHash $zip -Algorithm SHA256).Hash.ToLower() + "  $zip" | Set-Content "$zip.sha256"
 
       - name: Publish release

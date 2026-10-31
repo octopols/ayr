@@ -16,9 +16,10 @@ those jobs directly, through the same firmware interfaces MSI's software uses, f
 
 - **Light.** About 0.1% CPU and 30 MB of memory when idle. Nothing polls while no window is open, and the tray runs in
   Windows' efficiency mode.
-- **Portable.** No installer and no services: extract it, run it, delete the folder to remove it.
-- **No new drivers.** Ayr only uses what Windows and MSI already have running, which keeps it out of the way of kernel
-  anti-cheat.
+- **Self-contained.** No installer, no services, and no MSI software needed: the few MSI files Ayr relies on ship inside
+  its folder.
+- **Only MSI's own drivers.** Ayr loads the same two signed MSI drivers MSI Center does, and nothing else, and locks them
+  so only administrators can use them.
 - **Safe by default.** Every change can be rolled back, and Auto is always the fallback.
 
 ## Features
@@ -53,20 +54,19 @@ use different firmware that Ayr doesn't support yet.
 [docs/supported-models.md](docs/supported-models.md) shows what to compare, and a
 [Model report](../../issues/new/choose) is the fastest way to get your laptop added. Every report helps.
 
-**Requirements**
-
-- Windows 10 or 11, 64-bit. .NET Framework 4.8 is built into Windows, so there's nothing to install.
-- **MSI Foundation Service** must stay installed: Ayr uses its EC access library and its NVIDIA GPU library. The rest of
-  MSI Center can go.
-- **MSI Super Charger**, only for Apple fast charge.
+**Requirements:** Windows 10 or 11, 64-bit. .NET Framework 4.8 is built into Windows. Nothing from MSI needs to be
+installed, and MSI Center should be uninstalled: it re-applies its own profile after sleep, overriding Ayr.
 
 ## Install
 
 1. Download `Ayr-<version>-win-x64.zip` from [Releases](../../releases) and extract it anywhere, for example `C:\Tools\Ayr`.
-2. Run `Ayr.exe` and accept the administrator prompt; changing fan modes needs administrator rights.
+   Keep the `vendor` folder next to `Ayr.exe`.
+2. Run `Ayr.exe` and accept the administrator prompt; changing fan modes needs administrator rights. On a laptop where
+   MSI's software was never installed, Ayr sets up MSI's firmware interface and asks for one restart.
 3. Optional: in the main window, turn on **Start with Windows**.
 
-To remove Ayr, turn off **Start with Windows**, choose **Exit** in the tray menu, and delete the folder.
+To remove Ayr, run `ayrctl uninstall` (fans back to Auto, logon task and Ayr's driver entries removed), choose **Exit** in
+the tray menu, and delete the folder.
 
 ## Use
 
@@ -94,14 +94,15 @@ Settings are kept in `data\` next to the executables, and `data\events.log` reco
   can't be read, and a separate watchdog forces Auto if the guard itself stops.
 - **Narrow writes.** Only the fan curve, fan mode, performance level and Cooler Boost settings, plus the one-byte
   firmware handshake MSI's service also sets. Never the BIOS, battery or SMBus.
-- **No new drivers.** Ayr uses Windows' ACPI-WMI driver and MSI's already-installed WINIO driver, and loads nothing of its own.
+- **Only MSI's signed files, verified.** Ayr checks the signature of every MSI file before using it, loads MSI's drivers
+  only when a feature needs them, never stops them while in use, and restricts them to administrators.
 
 How all of this works is in [docs/how-it-works.md](docs/how-it-works.md).
 
 ## FAQ
 
-**Does it work with games that use kernel anti-cheat, like Valorant?** That's the reason Ayr loads no driver and only
-uses components that are already running. It hasn't been confirmed in a game yet; if you try it, please say so in an issue.
+**Does it work with games that use kernel anti-cheat, like Valorant?** Ayr loads only MSI's own signed drivers, the same
+ones MSI Center loads at every boot. It hasn't been confirmed in a game yet; if you try it, please say so in an issue.
 
 **Does it replace all of MSI Center?** No. It covers fans, performance levels, the GPU overclock, and Apple fast charge.
 Lighting, battery charge limits and display profiles stay with MSI Center.
@@ -117,20 +118,21 @@ start with a probe and a model report.
 Needs Windows and Visual Studio 2022 or the VS Build Tools (for the C# compiler).
 
 ```powershell
-./scripts/build.ps1            # builds bin\Ayr.exe and bin\ayrctl.exe
+./scripts/build.ps1            # builds bin\Ayr.exe and bin\ayrctl.exe, and copies vendor\ next to them
 ./scripts/e2e-test.ps1         # end-to-end test on real hardware (elevated; changes fan and performance modes)
 ```
 
 Every push is built by GitHub Actions; pushing a tag such as `v0.1.0` publishes a release.
 
-**Layout:** `src/Ayr` holds the app: `Hardware` (EC, WMI and GPU access), `Controllers` (fan and performance logic,
-snapshots), `Agent` (background guard), `Apple`, `Cli`, `Ui`. Documentation is in [docs/](docs/).
+**Layout:** `src/Ayr` holds the app: `Hardware` (EC, WMI, GPU and driver access), `Controllers` (fan and performance
+logic, snapshots), `Agent` (background guard), `Apple`, `Cli`, `Ui`. `vendor/` holds the six MSI files Ayr ships with.
+Documentation is in [docs/](docs/).
 
 ## Disclaimer
 
 Ayr is an independent project. It is not affiliated with, endorsed by, or supported by Micro-Star International (MSI).
 MSI, MSI Center, Dragon Center, Cooler Boost and Super Charger are trademarks of their owners and are used only to
-describe compatibility.
+describe compatibility. The files in `vendor/` are MSI's, unmodified, and remain MSI's property.
 
 Ayr changes low-level hardware settings. It is provided as is, without warranty; you use it at your own risk.
 

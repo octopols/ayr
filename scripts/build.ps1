@@ -1,6 +1,7 @@
 # Builds Ayr: two x64 .NET Framework 4.8 executables from the same sources.
 #   Ayr.exe      windowless tray app (the Start menu entry); with arguments it runs the same commands as ayrctl
 #   ayrctl.exe   console command line
+#   vendor      MSI's signed drivers and libraries, copied from the repository's vendor folder
 # x64 because MSI's GPU overclock library (GInf.dll) is 64-bit and is loaded in-process.
 # .NET Framework because it ships with Windows: nothing to install, and the app stays portable.
 [CmdletBinding()]
@@ -53,3 +54,9 @@ foreach ($target in $targets) {
     if ($LASTEXITCODE -ne 0) { throw "csc failed for $($target.Name) with exit code $LASTEXITCODE" }
     Write-Host "built $((Resolve-Path $output).Path)"
 }
+
+# MSI's signed files ship next to the executables; Ayr verifies each signature before using it.
+$vendorOut = Join-Path $OutDir 'vendor'
+New-Item -ItemType Directory -Force $vendorOut | Out-Null
+Copy-Item (Join-Path $PSScriptRoot '..\vendor\*') $vendorOut -Force
+Write-Host "copied MSI files to $((Resolve-Path $vendorOut).Path)"

@@ -20,11 +20,12 @@ jobs:
         shell: pwsh
         run: ./scripts/build.ps1 -InformationalVersion "0.0.0-ci+${{ github.sha }}"
 
-      - name: Upload executables
+      - name: Upload app
         uses: actions/upload-artifact@v4
         with:
           name: ayr-${{ github.sha }}
           path: |
             bin/Ayr.exe
             bin/ayrctl.exe
+            bin/vendor/
           if-no-files-found: error

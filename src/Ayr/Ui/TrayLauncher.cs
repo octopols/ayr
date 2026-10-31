@@ -5,7 +5,7 @@ using Ayr.Hardware;
 
 namespace Ayr.Ui
 {
-    /// <summary>Starts the tray: once per machine, elevated, with MSI's files copied into Ayr's own folder first.</summary>
+    /// <summary>Starts the tray: once per machine, elevated, and only once MSI's firmware interface is in place.</summary>
     public static class TrayLauncher
     {
         public const string TrayCommand = "tray";
@@ -43,7 +43,10 @@ namespace Ayr.Ui
                     }
                     return;
                 }
-                VendorLibrary.AdoptAllAvailable();
+                if (!FirmwareInterfaceReady())
+                {
+                    return;
+                }
                 if (restoreSettings)
                 {
                     new StartupApplier(new HardwareContext()).ApplyOrFailsafe();
@@ -52,8 +55,24 @@ namespace Ayr.Ui
             }
         }
 
+        private static bool FirmwareInterfaceReady()
+        {
+            switch (FirmwareInterface.EnsureRegistered())
+            {
+                case FirmwareInterfaceState.Ready:
+                    return true;
+                case FirmwareInterfaceState.RestartRequired:
+                    ShowMessage("Ayr has installed MSI's firmware interface. Restart Windows to finish setting it up.", MessageBoxIcon.Information);
+                    return false;
+                default:
+                    ShowMessage("Ayr only works on MSI laptops: this PC doesn't report MSI as its maker.", MessageBoxIcon.Warning);
+                    return false;
+            }
+        }
+
         private static void ShowAlreadyRunning() =>
-            MessageBox.Show("Ayr is already running.\n\nClick the Ayr icon in the system tray.", "Ayr",
-                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            ShowMessage("Ayr is already running.\n\nClick the Ayr icon in the system tray.", MessageBoxIcon.Information);
+
+        private static void ShowMessage(string text, MessageBoxIcon icon) => MessageBox.Show(text, "Ayr", MessageBoxButtons.OK, icon);
     }
 }
