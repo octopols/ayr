@@ -265,9 +265,9 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                 fans = "Fans could not be set to Auto (" + ex.Message + "); run \"ayrctl fan auto\" before deleting Ayr.";
             }
             new AutostartTask().Remove();
-            bool driverRemoved = WinIoDriver.RemoveIfOwned();
-            _output.WriteLine("Removed the logon task{0}. {1}", driverRemoved
-                ? " and Ayr's WINIO driver entry (the driver unloads at the next restart)"
+            bool driversRemoved = KernelDriver.EcAccess.RemoveIfOwned() | KernelDriver.AppleCharge.RemoveIfOwned();
+            _output.WriteLine("Removed the logon task{0}. {1}", driversRemoved
+                ? " and Ayr's driver entries (the drivers unload at the next restart)"
                 : "", fans);
             _output.WriteLine("Exit the tray, then delete this folder: {0}", AppPaths.ExecutableDirectory);
             return ExitCode.Success;

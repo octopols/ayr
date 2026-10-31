@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using Ayr.Agent;
 using Ayr.App;
 using Ayr.Controllers;
+using Ayr.Hardware;
 
 namespace Ayr.Ui
 {
@@ -42,6 +43,7 @@ namespace Ayr.Ui
         {
             // Background results are marshalled through this control, so it needs its window handle before any window opens.
             _ = _uiThread.Handle;
+            VendorLibrary.AdoptAllAvailable();
             _backend = new UiBackend(_hardware);
             _backend.ModeChanged += change => _uiThread.BeginInvoke((Action)(() => OnModeChanged(change)));
 

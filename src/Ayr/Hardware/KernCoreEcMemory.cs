@@ -81,7 +81,7 @@ namespace Ayr.Hardware
         private static void Load()
         {
             string path = VendorLibrary.EcAccess.Locate();
-            WinIoDriver.EnsureRunning();
+            KernelDriver.EcAccess.EnsureRunning();
             IntPtr module = Kernel32.LoadLibraryEx(path, IntPtr.Zero, Kernel32.LoadWithAlteredSearchPath);
             if (module == IntPtr.Zero)
             {

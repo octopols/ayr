@@ -1,45 +1,39 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.ServiceProcess;
 using System.Text;
 using System.Threading;
 using Ayr.App;
+using Ayr.Hardware;
 
 namespace Ayr.Apple
 {
     /// <summary>
-    /// MSI Super Charger's fast-charge request, made the way Super Charger's own service made it: by running MSI's unmodified
-    /// ipadchg2.exe from Super Charger's folder. ipadchg2 starts the ipadtst2 driver if needed and sends the request
-    /// (docs/apple-fast-charge.md).
+    /// MSI Super Charger's fast-charge request, sent with MSI's own unmodified helper (ipadchg2.exe) and kernel driver
+    /// (ipadtst2_64.sys), which Ayr copies into vendor\ so Super Charger itself isn't needed (docs/apple-fast-charge.md).
+    /// Ayr starts the driver and locks it down before the helper runs; the helper then only sends the request.
     ///
-    /// On Windows 11 25H2 a burst of requests hung the PC and stopping the driver bugchecked it
-    /// (0x139/3). So ayrctl never stops the driver (it stays loaded until reboot, as with Super Charger), and requests are
-    /// serialized system-wide and spaced at least MinimumGap apart, Super Charger's own cadence.
+    /// On Windows 11 25H2 a burst of requests hung the PC and stopping the driver bugchecked it (0x139/3). So the driver is
+    /// never stopped (it stays loaded until restart, as with Super Charger), and requests are serialized system-wide and
+    /// spaced at least MinimumGap apart, Super Charger's own cadence.
     /// </summary>
     public sealed class AppleChargeDriver
     {
         public static readonly TimeSpan MinimumGap = TimeSpan.FromMinutes(5);
 
-        private const string DriverServiceName = "ipadtst2";
-        private const string HelperName = "ipadchg2.exe";
         private const string RequestMutexName = "Global\\Ayr.AppleChargeSend";
         private static readonly TimeSpan HelperTimeout = TimeSpan.FromSeconds(30);
 
         // The hub drivers the request inside ipadtst2_64.sys is written for.
         private static readonly string[] SupportedHubServices = { "USBHUB3", "amdhub31" };
 
-        private static string SuperChargerDirectory =>
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "MSI", "Super Charger");
-
-        private static string HelperPath => Path.Combine(SuperChargerDirectory, HelperName);
-
         public static bool SupportsHub(string hubService) =>
             Array.Exists(SupportedHubServices, supported => string.Equals(supported, hubService, StringComparison.OrdinalIgnoreCase));
 
-        public bool IsInstalled => DriverStatus().HasValue && File.Exists(HelperPath);
+        /// <summary>True when Ayr has, or can still adopt, both of MSI's files.</summary>
+        public bool IsAvailable => VendorLibrary.AppleChargeHelper.IsAvailable && VendorLibrary.AppleChargeDriver.IsAvailable;
 
-        public bool IsLoaded => DriverStatus() == ServiceControllerStatus.Running;
+        public bool IsLoaded => KernelDriver.AppleCharge.IsRunning;
 
         /// <summary>Runs ipadchg2.exe once, unless a request is already in progress or the last one was too recent.</summary>
         public bool TrySend(AppleRequestLog log, out string refusal)
@@ -87,14 +81,12 @@ namespace Ayr.Apple
 
         private static void RunHelper()
         {
-            if (!File.Exists(HelperPath))
+            string helperPath = VendorLibrary.AppleChargeHelper.Locate();
+            KernelDriver.AppleCharge.EnsureRunning();
+            // ipadchg2 would install the driver from its current directory if it found the device missing.
+            var start = new ProcessStartInfo(helperPath)
             {
-                throw new FileNotFoundException("MSI Super Charger's " + HelperName + " is missing.", HelperPath);
-            }
-            // ipadchg2 builds the driver path from its current directory.
-            var start = new ProcessStartInfo(HelperPath)
-            {
-                WorkingDirectory = SuperChargerDirectory,
+                WorkingDirectory = Path.GetDirectoryName(helperPath),
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -121,28 +113,10 @@ namespace Ayr.Apple
                 helper.BeginErrorReadLine();
                 if (!helper.WaitForExit((int)HelperTimeout.TotalMilliseconds))
                 {
-                    throw new System.TimeoutException(HelperName + " did not finish within " + HelperTimeout.TotalSeconds + " s.");
+                    throw new TimeoutException("ipadchg2.exe did not finish within " + HelperTimeout.TotalSeconds + " s.");
                 }
                 helper.WaitForExit();
                 ActivityLog.Write("ipadchg2 exit " + helper.ExitCode + ": " + output.ToString().Trim());
-            }
-        }
-
-        private static ServiceControllerStatus? DriverStatus()
-        {
-            ServiceController[] drivers = ServiceController.GetDevices();
-            try
-            {
-                ServiceController driver = Array.Find(drivers, candidate =>
-                    string.Equals(candidate.ServiceName, DriverServiceName, StringComparison.OrdinalIgnoreCase));
-                return driver?.Status;
-            }
-            finally
-            {
-                foreach (ServiceController controller in drivers)
-                {
-                    controller.Dispose();
-                }
             }
         }
     }

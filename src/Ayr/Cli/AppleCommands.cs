@@ -70,9 +70,9 @@ ayrctl apple boost                   send one request now (at most one per 5 min
         private void WriteStatus()
         {
             AppleChargeDriver driver = _charger.Driver;
-            string driverState = !driver.IsInstalled ? "not installed (needs MSI Super Charger)"
-                : driver.IsLoaded ? "ipadtst2 loaded (stays until reboot)"
-                : "ipadtst2 installed, not loaded";
+            string driverState = !driver.IsAvailable ? "not available (install MSI Super Charger once so Ayr can copy it)"
+                : driver.IsLoaded ? "ipadtst2 loaded (stays until restart)"
+                : "ipadtst2 ready, loads with the first request";
             List<AppleDevice> devices = _charger.Inventory.List(includeDisconnected: false);
             _output.WriteLine("Fast charge  : {0}", DesiredState.Load().AppleFastCharge ? "on (one request per plug-in)" : "off");
             _output.WriteLine("MSI driver   : {0}", driverState);

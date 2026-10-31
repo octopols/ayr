@@ -55,7 +55,7 @@ namespace Ayr.Ui
 
         public SlowState ReadSlow(bool includeAutostart) => new SlowState(
             DesiredState.Load(),
-            _charger.Driver.IsInstalled,
+            _charger.Driver.IsAvailable,
             _charger.Inventory.List(includeDisconnected: false),
             includeAutostart ? _autostart.IsInstalled : (bool?)null);
 
