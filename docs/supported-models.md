@@ -3,11 +3,25 @@
 Ayr writes to the embedded controller, so it only switches modes on models whose register layout has been verified.
 This page lists those models, explains what differs between models, and shows how to check yours safely and help add it.
 
-## Verified
+## Tested devices
 
-| Model | Board | Firmware path | Fans & performance | GPU offsets | Apple fast charge |
-|---|---|---|---|---|---|
-| GF65 Thin 10SDR | MS-16W1 | v1 | ✅ | ✅ GTX 1660 Ti, 0-180 / 0-500 MHz | ⚠️ request sent, charging speed not yet measured |
+| Icon | Meaning |
+|---|---|
+| ✅ | Works, tested on this device |
+| 🧪 | Works, but only partly tested (see the note) |
+| ➖ | The device doesn't have this feature |
+| ❌ | The device has it, but Ayr doesn't support it yet |
+
+| Device | Type | Board | Fan modes | Cooler Boost | Performance levels | GPU overclock | Apple fast charge | Start with Windows |
+|---|---|---|---|---|---|---|---|---|
+| MSI GF65 Thin 10SDR | Laptop | MS-16W1 | ✅ | ✅ | ✅ | ✅ | 🧪 ¹ | 🧪 ² |
+
+1. The request is sent and the system stays stable, but whether charging actually gets faster hasn't been measured yet.
+2. Restoring settings through a real sign-in after a reboot hasn't been tested yet.
+
+**MSI desktop motherboards** haven't been tested. Fan modes, Cooler Boost, performance levels and the GPU overclock are
+❌ on them: desktop fans are run by a different chip than the laptop embedded controller Ayr talks to. Apple fast charge
+doesn't depend on the board and might work, but nobody has tried it yet.
 
 ## Probably compatible, not yet verified
 

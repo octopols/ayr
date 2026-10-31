@@ -39,11 +39,15 @@ those jobs directly, through the same firmware interfaces MSI's software uses, f
 Ayr changes settings inside your laptop's embedded controller, so it only switches modes on models whose registers have
 been verified.
 
-| Status | Models |
-|---|---|
-| ✅ Verified | GF65 Thin 10SDR |
-| 🟡 Likely compatible | Other MSI laptops with 10th-gen Intel or older (MSI's "v1" firmware path) |
-| ⏳ Not yet supported | 11th-gen Intel and newer ("v2" firmware); AMD-based models unknown |
+✅ works, tested · 🧪 works, partly tested · ➖ the device doesn't have it · ❌ the device has it, Ayr doesn't support it yet
+
+| Device | Type | Fan modes | Cooler Boost | Performance levels | GPU overclock | Apple fast charge | Start with Windows |
+|---|---|---|---|---|---|---|---|
+| MSI GF65 Thin 10SDR | Laptop | ✅ | ✅ | ✅ | ✅ | 🧪 | 🧪 |
+
+Notes on the 🧪 entries, and on desktop motherboards, are in [docs/supported-models.md](docs/supported-models.md).
+Other MSI laptops with 10th-gen Intel or older very likely work the same way but haven't been tested. 11th-gen and newer
+use different firmware that Ayr doesn't support yet.
 
 **Don't see your model?** You can check it without changing anything: `ayrctl probe` and `ayrctl status` only read.
 [docs/supported-models.md](docs/supported-models.md) shows what to compare, and a
