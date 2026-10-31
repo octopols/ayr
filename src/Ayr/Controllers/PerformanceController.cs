@@ -6,8 +6,8 @@ using Ayr.Hardware;
 namespace Ayr.Controllers
 {
     /// <summary>
-    /// Performance levels the way Dragon Center applies them on this machine: only the EC shift mode changes (the i5-10500H
-    /// gets no CPU overclock), and Turbo additionally gets the user's GPU offsets.
+    /// Performance levels the way MSI Center applies them on v1 firmware: only the EC shift mode changes, and Turbo
+    /// additionally gets the GPU offsets.
     /// </summary>
     public sealed class PerformanceController
     {

@@ -6,7 +6,7 @@ using Ayr.Hardware;
 namespace Ayr.Controllers
 {
     /// <summary>
-    /// Fan modes the way Dragon Center sets them on this machine: Auto is the stock curve with no mode bits, Max is the
+    /// Fan modes the way MSI Center sets them on v1 firmware: Auto is the stock curve with no mode bits, Max is the
     /// advanced bit with every curve point at 100%, Silent is the silent bit, and Boost is the EC's Cooler Boost bit.
     /// </summary>
     public sealed class FanController

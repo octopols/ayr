@@ -1,4 +1,4 @@
-# End-to-end test of ayrctl against real hardware. Must run elevated. Ends in the user's pre-test setup: Cooler Boost + Turbo (+180/+500).
+# End-to-end test of ayrctl against real hardware. Must run elevated. Ends on Boost and Turbo with the default GPU offsets.
 param(
     [string]$Log = (Join-Path $PSScriptRoot '..\bin\e2e-result.txt'),
     [string]$Exe = (Join-Path $PSScriptRoot '..\bin\ayrctl.exe')
@@ -64,7 +64,7 @@ $o = Ayrctl oc,120,300;   Check ($o -match 'Saved core \+120 MHz, memory \+300 M
 $o = Ayrctl perf,turbo;   Check ($o -match 'GPU offsets\s+: core \+120 MHz, memory \+300 MHz') 'perf turbo applies saved +120/+300'
 $o = Ayrctl oc,999,1;     Check ($o -match 'must be 0..180') 'out-of-range offset rejected'
 
-# Restore the user's setup.
+# Leave the laptop on Boost and Turbo with the default GPU offsets.
 $o = Ayrctl perf,turbo,180,500; Check ($o -match 'GPU offsets\s+: core \+180 MHz, memory \+500 MHz' -and $o -match 'Turbo OC\s+: core \+180 MHz, memory \+500 MHz') 'perf turbo 180 500'
 $o = Ayrctl fan,boost
 $o = Ayrctl status

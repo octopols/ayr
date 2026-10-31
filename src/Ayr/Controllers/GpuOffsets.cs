@@ -5,8 +5,8 @@ using Ayr.Hardware;
 namespace Ayr.Controllers
 {
     /// <summary>
-    /// GPU clock offsets applied in Turbo, within Dragon Center's limits for the GTX 1660 Ti (UserScenario.Check_NV_OC):
-    /// 0..180 MHz core and 0..500 MHz memory. Negative offsets are not offered.
+    /// GPU clock offsets applied in Turbo, 0..180 MHz core and 0..500 MHz memory: MSI Center's limits for the GTX 1660 Ti
+    /// (UserScenario.Check_NV_OC), the verified model's GPU. Negative offsets are not offered.
     /// </summary>
     public sealed class GpuOffsets
     {

@@ -9,7 +9,7 @@ namespace Ayr.Hardware
 {
     /// <summary>
     /// EC RAM through MSI Foundation Service's named pipe "MSI_SERVICE_2", which works without administrator rights while
-    /// that service runs. Protocol recovered from NamedPipeClientLib and MSIAPService (see FINDINGS.md):
+    /// that service runs. Protocol recovered from MSI's NamedPipeClientLib and MSIAPService:
     /// frames are 00 FF + big-endian total length + ASCII, encrypted with 3DES-ECB keyed by
     /// MD5("msiservice" + client name + yyyyMMdd).
     /// </summary>

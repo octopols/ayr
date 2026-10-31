@@ -11,9 +11,9 @@ namespace Ayr.Apple
     /// <summary>
     /// MSI Super Charger's fast-charge request, made the way Super Charger's own service made it: by running MSI's unmodified
     /// ipadchg2.exe from Super Charger's folder. ipadchg2 starts the ipadtst2 driver if needed and sends the request
-    /// (FINDINGS-SuperCharger.md).
+    /// (docs/apple-fast-charge.md).
     ///
-    /// Learned the hard way on this PC (2026-10-31): a burst of requests hung it and stopping the driver bugchecked it
+    /// On Windows 11 25H2 a burst of requests hung the PC and stopping the driver bugchecked it
     /// (0x139/3). So ayrctl never stops the driver (it stays loaded until reboot, as with Super Charger), and requests are
     /// serialized system-wide and spaced at least MinimumGap apart, Super Charger's own cadence.
     /// </summary>

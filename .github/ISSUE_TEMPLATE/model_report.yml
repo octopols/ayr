@@ -1,0 +1,55 @@
+name: Model report
+description: Share your laptop's read-only probe so it can be added to the supported list
+title: "Model report: "
+labels: ["model-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping Ayr support more MSI laptops. Everything asked for here comes from commands that only **read**
+        from your hardware. See docs/supported-models.md for what the values mean.
+  - type: input
+    id: model
+    attributes:
+      label: Laptop model
+      description: Full model name and board, e.g. "GF65 Thin 10SDR (MS-16W1)"
+    validations:
+      required: true
+  - type: input
+    id: hardware
+    attributes:
+      label: CPU and GPU
+      description: e.g. "i5-10500H, GTX 1660 Ti"
+    validations:
+      required: true
+  - type: input
+    id: bios
+    attributes:
+      label: BIOS version
+    validations:
+      required: true
+  - type: textarea
+    id: probe
+    attributes:
+      label: Output of "ayrctl probe"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of "ayrctl status"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: msi-center
+    attributes:
+      label: What MSI Center showed at the time
+      description: Performance level, fan mode, and whether Cooler Boost was on
+  - type: checkboxes
+    id: e2e
+    attributes:
+      label: Write test
+      options:
+        - label: I also ran scripts/e2e-test.ps1 and attached its log (optional; it changes fan and performance modes)

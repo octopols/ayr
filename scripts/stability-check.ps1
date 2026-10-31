@@ -1,4 +1,4 @@
-# Watches the GPU while you play or run a GPU load with Turbo (+180 core / +500 memory) active.
+# Watches the GPU while you play or run a GPU load in Turbo with your GPU offsets applied.
 # Reports driver resets (nvlddmkm errors, Display event 4101), offsets dropping, and peak clocks/temps.
 # Read-only: changes nothing.
 [CmdletBinding()]
@@ -15,12 +15,13 @@ $fields = 'temperature.gpu,utilization.gpu,clocks.sm,clocks.mem,pstate,power.dra
 
 $offsetLost = 0; $samples = 0; $loaded = 0
 $peakSm = 0; $peakMem = 0; $peakTemp = 0
-$core = ''; $mem = ''
+$core = ''; $mem = ''; $wantedCore = ''; $wantedMem = ''
 while ((Get-Date) -lt $end) {
     if ($samples % 15 -eq 0) {
         $status = & $Ayrctl status | Out-String
-        if ($status -match 'core ([+-]?\d+) MHz, memory ([+-]?\d+) MHz') { $core = $Matches[1]; $mem = $Matches[2] }
-        if ($core -ne '+180' -or $mem -ne '+500') { $offsetLost++ }
+        if ($status -match 'GPU offsets\s+: core ([+-]?\d+) MHz, memory ([+-]?\d+) MHz') { $core = $Matches[1]; $mem = $Matches[2] }
+        if ($status -match 'Turbo OC\s+: core (\+\d+) MHz, memory (\+\d+) MHz') { $wantedCore = $Matches[1]; $wantedMem = $Matches[2] }
+        if ($core -ne $wantedCore -or $mem -ne $wantedMem) { $offsetLost++ }
     }
     $line = (& nvidia-smi "--query-gpu=$fields" --format=csv,noheader,nounits 2>$null | Select-Object -First 1)
     if ($line) {
@@ -40,7 +41,7 @@ $resets = Get-WinEvent -FilterHashtable @{ LogName = 'System'; StartTime = $star
 ""
 "Stability check $($start.ToString('HH:mm'))-$((Get-Date).ToString('HH:mm')), $samples samples, $loaded under load (>=50% util)"
 "Peak: SM $peakSm MHz, memory $peakMem MHz, GPU $peakTemp C"
-"Offset checks not at +180/+500: $offsetLost"
+"Offset checks that didn't match the saved Turbo offsets: $offsetLost"
 "Driver reset / nvlddmkm events: $(@($resets).Count)"
 $resets | Select-Object TimeCreated, ProviderName, Id, @{ n = 'Message'; e = { ($_.Message -split "`n")[0] } } | Format-Table -AutoSize | Out-String -Width 200
 "CSV: $OutFile"

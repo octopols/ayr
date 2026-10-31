@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Ayr.Apple;
 using Ayr.Controllers;
+using Ayr.Hardware;
 using Ayr.Ui.Controls;
 
 namespace Ayr.Ui
@@ -69,7 +70,7 @@ namespace Ayr.Ui
             Text = "Ayr";
             Icon = _windowIcon;
 
-            _header = new HeaderBand(Theme, "Ayr", "GF65 Thin 10SDR");
+            _header = new HeaderBand(Theme, "Ayr", MachineIdentity.ModelName);
             _header.MinimizeClicked += () => WindowState = FormWindowState.Minimized;
             _header.CloseClicked += Close;
             _viewport = new ScrollViewport { BackColor = Theme.Background };

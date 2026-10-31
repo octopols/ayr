@@ -164,7 +164,7 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
             }
             if (offsets == null)
             {
-                _output.WriteLine("Turbo offsets: {0} (limits: core 0-{1}, memory 0-{2} MHz, as in Dragon Center for the GTX 1660 Ti)",
+                _output.WriteLine("Turbo offsets: {0} (limits: core 0-{1}, memory 0-{2} MHz)",
                     DesiredState.Load().TurboOffsets, GpuOffsets.MaxCoreMhz, GpuOffsets.MaxMemoryMhz);
                 _output.WriteLine("Change with: ayrctl oc <core> <memory>");
                 return ExitCode.Success;

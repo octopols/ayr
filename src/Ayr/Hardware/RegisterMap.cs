@@ -1,7 +1,8 @@
 namespace Ayr.Hardware
 {
     /// <summary>
-    /// Register map for the MS-16W1 (GF65 Thin 10SDR), EC firmware 16W1EMS2; evidence for every entry is in FINDINGS.md.
+    /// Register map for MSI's v1 firmware path, verified on the MS-16W1 (GF65 Thin 10SDR, EC firmware 16W1EMS2).
+    /// docs/how-it-works.md explains every entry.
     /// MSI_System[i] mirrors EC RAM 0xEB + i.
     /// </summary>
     public static class RegisterMap
