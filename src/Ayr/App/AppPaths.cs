@@ -30,6 +30,8 @@ namespace Ayr.App
 
         public static string AppleRequestsFile => Path.Combine(DataDirectory, "apple-boosts.ini");
 
+        public static string GamesFile => Path.Combine(DataDirectory, "games.ini");
+
         public static string SnapshotLog => Path.Combine(DataDirectory, "snapshots.log");
 
         public static string ActivityLog => Path.Combine(DataDirectory, "events.log");

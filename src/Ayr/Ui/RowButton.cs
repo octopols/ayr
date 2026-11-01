@@ -1,6 +1,6 @@
 namespace Ayr.Ui
 {
-    public enum SendButton
+    public enum RowButton
     {
         Hidden,
         Available,

@@ -2,16 +2,18 @@ using System;
 using System.Collections.Generic;
 using Ayr.App;
 using Ayr.Apple;
+using Ayr.Games;
 
 namespace Ayr.Ui
 {
     /// <summary>Costlier readings (device queries, services, the scheduled task) refreshed rarely or after a change.</summary>
     public sealed class SlowState
     {
-        public SlowState(DesiredState desired, IReadOnlyList<AppleDeviceStatus> appleDevices, DateTime nextAppleRequestAllowedAt,
-            bool? autostartOn, bool msiCenterRunning)
+        public SlowState(DesiredState desired, GameOverview games, IReadOnlyList<AppleDeviceStatus> appleDevices,
+            DateTime nextAppleRequestAllowedAt, bool? autostartOn, bool msiCenterRunning)
         {
             Desired = desired;
+            Games = games;
             AppleDevices = appleDevices;
             NextAppleRequestAllowedAt = nextAppleRequestAllowedAt;
             AutostartOn = autostartOn;
@@ -19,6 +21,7 @@ namespace Ayr.Ui
         }
 
         public DesiredState Desired { get; }
+        public GameOverview Games { get; }
         public IReadOnlyList<AppleDeviceStatus> AppleDevices { get; }
         public DateTime NextAppleRequestAllowedAt { get; }
 

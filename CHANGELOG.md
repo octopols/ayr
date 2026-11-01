@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased
+
+- Game mode also finds GOG and Ubisoft Connect games.
+- A launcher's damaged record no longer hides the other games it lists.
+- `ayrctl game add` and `remove` take one path; quote it if it has spaces.
+
+## 0.3.0 (2026-11-01)
+
+- **Game mode:** while one of your games runs, Ayr switches to Turbo with your GPU overclock and Cooler Boost, and puts
+  your everyday settings back when the last game closes. It also restores them after sleep, and if Ayr exits mid-game.
+- Ayr finds your games: from Riot, Steam and Epic, from Windows' own list of games it has seen run, and from game
+  folders such as `D:\Games`. **Scan again** looks again at any time, and **Add another game…** adds anything else.
+- A game is watched by its whole folder, so it counts no matter which of its programs is running.
+- Detection uses Windows' process start and stop events, so nothing is polled.
+- `ayrctl game` shows and changes Game mode and your games.
+
 ## 0.2.0 (2026-11-01)
 
 - Apple fast charge shows each device's state: a green "Fast charging" badge once the request has been sent for the

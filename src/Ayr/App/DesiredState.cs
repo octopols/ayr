@@ -17,6 +17,7 @@ namespace Ayr.App
         private const string TurboMemoryKey = "turbo_memory";
         private const string AppleAutoFastChargeKey = "apple_fastcharge";
         private const string AutoUpdateKey = "auto_update";
+        private const string GameModeKey = "game_mode";
         private const string On = "on";
         private const string Off = "off";
 
@@ -27,8 +28,9 @@ namespace Ayr.App
         public GpuOffsets TurboOffsets { get; set; } = GpuOffsets.Default;
         public bool AppleAutoFastCharge { get; set; }
         public bool AutoUpdate { get; set; } = true;
+        public bool GameMode { get; set; }
 
-        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleAutoFastCharge;
+        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleAutoFastCharge || GameMode;
 
         public static DesiredState Load()
         {
@@ -55,6 +57,7 @@ namespace Ayr.App
             }
             state.AppleAutoFastCharge = values.TryGetValue(AppleAutoFastChargeKey, out string apple) && apple == On;
             state.AutoUpdate = !values.TryGetValue(AutoUpdateKey, out string update) || update != Off;
+            state.GameMode = values.TryGetValue(GameModeKey, out string gameMode) && gameMode == On;
             return state;
         }
 
@@ -67,7 +70,8 @@ namespace Ayr.App
                 [TurboCoreKey] = TurboOffsets.CoreMhz.ToString(CultureInfo.InvariantCulture),
                 [TurboMemoryKey] = TurboOffsets.MemoryMhz.ToString(CultureInfo.InvariantCulture),
                 [AppleAutoFastChargeKey] = AppleAutoFastCharge ? On : Off,
-                [AutoUpdateKey] = AutoUpdate ? On : Off
+                [AutoUpdateKey] = AutoUpdate ? On : Off,
+                [GameModeKey] = GameMode ? On : Off
             });
         }
 

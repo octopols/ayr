@@ -5,6 +5,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Ayr.App;
 using Ayr.Controllers;
+using Ayr.Games;
 using Ayr.Hardware;
 using Ayr.Ui.Controls;
 using Ayr.Updates;
@@ -23,6 +24,7 @@ namespace Ayr.Ui
         private const int CardPadding = 14;
         private const int ScreenMargin = 40;
         private const int MaxDeviceRows = 3;
+        private const int MaxGameRows = 16;
         private const string MsiCenterWarning = "MSI Center is running and overrides Ayr's settings after sleep. Uninstall MSI Center.";
         private const string CheckForUpdatesLabel = "Check for updates";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
@@ -50,13 +52,22 @@ namespace Ayr.Ui
         private readonly TitleWithSubtitle _overclockTitle;
         private readonly LabeledSlider _coreOffset, _memoryOffset;
         private readonly FlatButton _applyOverclock;
+        private readonly TitleWithSubtitle _gameTitle;
+        private readonly Card _gameCard;
+        private readonly TitleWithSubtitle _gameAutomaticRow;
+        private readonly ToggleSwitch _gameToggle;
+        private readonly Panel _gameDivider;
+        private readonly List<ListRow> _gameRows = new List<ListRow>();
+        private readonly MutedText _gamesFoundLabel;
+        private readonly FlatButton _scanGames;
+        private readonly FlatButton _addGame;
         private readonly TitleWithSubtitle _appleTitle;
         private readonly Card _appleCard;
         private readonly TitleWithSubtitle _appleAutomaticRow;
         private readonly ToggleSwitch _appleToggle;
         private readonly Panel _appleDivider;
         private readonly ThemedToolTip _toolTip;
-        private readonly List<DeviceRow> _deviceRows = new List<DeviceRow>();
+        private readonly List<ListRow> _deviceRows = new List<ListRow>();
         private readonly TitleWithSubtitle _settingsTitle;
         private readonly Card _settingsCard;
         private readonly TitleWithSubtitle _autostartRow;
@@ -73,6 +84,8 @@ namespace Ayr.Ui
         private bool _msiCenterRunning;
         private string _bannerText;
         private int _visibleDeviceRows = 1;
+        private List<GameEntry> _shownAddedGames = new List<GameEntry>();
+        private List<GameEntry> _shownFoundGames = new List<GameEntry>();
         private ReleaseInfo _availableUpdate;
         private bool _updateInFlight;
 
@@ -120,17 +133,37 @@ namespace Ayr.Ui
                 Apply(() => _backend.ApplyTurboOffsets(offsets));
             };
 
+            _toolTip = new ThemedToolTip(Theme);
+
+            _gameTitle = AddToPage(new TitleWithSubtitle(Theme, "Game mode", "Turbo, GPU overclock and Cooler Boost while you play", Theme.Section, Theme.Background));
+            _gameCard = AddToPage(new Card(Theme));
+            _gameAutomaticRow = AddTo(_gameCard, new TitleWithSubtitle(Theme, "Turn on while playing", null, Theme.BodyBold, Theme.Surface));
+            _gameToggle = AddTo(_gameCard, new ToggleSwitch(Theme) { BackColor = Theme.Surface });
+            _gameToggle.Toggled += on => Apply(() => _backend.SetGameMode(on));
+            _gameDivider = AddTo(_gameCard, new Panel { BackColor = Theme.Border });
+            for (int row = 0; row < MaxGameRows; row++)
+            {
+                int index = row;
+                ListRow gameRow = AddTo(_gameCard, new ListRow(Theme, _toolTip, GameRowContent.AddLabel, GameRowContent.RemoveLabel));
+                gameRow.ButtonClicked += () => OnGameRowClicked(index);
+                _gameRows.Add(gameRow);
+            }
+            _gamesFoundLabel = AddTo(_gameCard, new MutedText(Theme, "Found on this PC", Theme.Surface));
+            _scanGames = AddTo(_gameCard, new FlatButton(Theme, "Scan again", ButtonStyle.Secondary) { BackColor = Theme.Surface });
+            _scanGames.Click += (sender, e) => Apply(_backend.ScanForGames);
+            _addGame = AddTo(_gameCard, new FlatButton(Theme, "Add another game…", ButtonStyle.Secondary) { BackColor = Theme.Surface });
+            _addGame.Click += (sender, e) => BrowseForGame();
+
             _appleTitle = AddToPage(new TitleWithSubtitle(Theme, "Apple fast charge", "Faster charging for iPhone and iPad", Theme.Section, Theme.Background));
             _appleCard = AddToPage(new Card(Theme));
             _appleAutomaticRow = AddTo(_appleCard, new TitleWithSubtitle(Theme, "Send automatically", "Every iPhone or iPad gets the request when plugged in", Theme.BodyBold, Theme.Surface));
             _appleToggle = AddTo(_appleCard, new ToggleSwitch(Theme) { BackColor = Theme.Surface });
             _appleToggle.Toggled += on => Apply(() => _backend.SetAppleAutoFastCharge(on));
             _appleDivider = AddTo(_appleCard, new Panel { BackColor = Theme.Border });
-            _toolTip = new ThemedToolTip(Theme);
             for (int row = 0; row < MaxDeviceRows; row++)
             {
-                DeviceRow deviceRow = AddTo(_appleCard, new DeviceRow(Theme, _toolTip));
-                deviceRow.SendClicked += () => Apply(_backend.SendAppleFastCharge);
+                ListRow deviceRow = AddTo(_appleCard, new ListRow(Theme, _toolTip, AppleRowContent.SendLabel, AppleRowContent.SentLabel));
+                deviceRow.ButtonClicked += () => Apply(_backend.SendAppleFastCharge);
                 _deviceRows.Add(deviceRow);
             }
 
@@ -223,8 +256,8 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _appleToggle, _autostartToggle, _autoUpdateToggle };
-            foreach (Control input in inputs.Concat(_deviceRows))
+            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _gameToggle, _scanGames, _addGame, _appleToggle, _autostartToggle, _autoUpdateToggle };
+            foreach (Control input in inputs.Concat(_gameRows).Concat(_deviceRows))
             {
                 input.Enabled = !busy;
             }
@@ -349,9 +382,68 @@ namespace Ayr.Ui
             {
                 _autostartToggle.Checked = slow.AutostartOn.Value;
             }
+            ShowGames(slow);
             ShowAppleDevices(slow);
             _msiCenterRunning = slow.MsiCenterRunning;
             UpdateBanner();
+        }
+
+        private void ShowGames(SlowState slow)
+        {
+            GameOverview games = slow.Games;
+            _gameToggle.Checked = slow.Desired.GameMode;
+            GameEntry playing = games.Running.FirstOrDefault();
+            _gameAutomaticRow.SetSubtitle(!slow.Desired.GameMode ? "Starts when one of your games starts"
+                : playing != null ? "On now: " + playing.Name + " is running"
+                : "Waiting for one of your games");
+
+            List<GameEntry> added = games.Added.Take(MaxGameRows).ToList();
+            List<GameEntry> found = games.FoundNotAdded.Take(MaxGameRows - added.Count).ToList();
+            for (int row = 0; row < added.Count; row++)
+            {
+                _gameRows[row].SetContent(GameRowContent.Added(added[row], games.Running.Any(added[row].SamePathAs)));
+            }
+            for (int row = 0; row < found.Count; row++)
+            {
+                _gameRows[added.Count + row].SetContent(GameRowContent.Found(found[row]));
+            }
+            if (added.Count + found.Count == 0)
+            {
+                _gameRows[0].SetContent(GameRowContent.NoGames);
+            }
+            bool layoutChanged = added.Count != _shownAddedGames.Count || found.Count != _shownFoundGames.Count;
+            _shownAddedGames = added;
+            _shownFoundGames = found;
+            if (layoutChanged)
+            {
+                Relayout();
+            }
+        }
+
+        private void OnGameRowClicked(int row)
+        {
+            if (row < _shownAddedGames.Count)
+            {
+                GameEntry game = _shownAddedGames[row];
+                Apply(() => _backend.RemoveGame(game));
+            }
+            else if (row - _shownAddedGames.Count < _shownFoundGames.Count)
+            {
+                GameEntry game = _shownFoundGames[row - _shownAddedGames.Count];
+                Apply(() => _backend.AddGame(game));
+            }
+        }
+
+        private void BrowseForGame()
+        {
+            using (var dialog = new OpenFileDialog { Title = "Choose the game", Filter = "Games (*.exe)|*.exe" })
+            {
+                if (dialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    string path = dialog.FileName;
+                    Apply(() => _backend.AddGamePath(path));
+                }
+            }
         }
 
         private void ShowAppleDevices(SlowState slow)
@@ -359,11 +451,11 @@ namespace Ayr.Ui
             int connected = slow.AppleDevices.Count;
             if (connected == 0)
             {
-                _deviceRows[0].SetContent(DeviceRowContent.NoDevice);
+                _deviceRows[0].SetContent(AppleRowContent.NoDevice);
             }
             for (int row = 0; row < Math.Min(connected, MaxDeviceRows); row++)
             {
-                _deviceRows[row].SetContent(DeviceRowContent.For(slow.AppleDevices[row], slow.Desired.AppleAutoFastCharge, slow.NextAppleRequestAllowedAt));
+                _deviceRows[row].SetContent(AppleRowContent.For(slow.AppleDevices[row], slow.Desired.AppleAutoFastCharge, slow.NextAppleRequestAllowedAt));
             }
             int visibleRows = Math.Max(1, Math.Min(MaxDeviceRows, connected));
             if (visibleRows != _visibleDeviceRows)
@@ -418,6 +510,8 @@ namespace Ayr.Ui
             Stack(_performanceTitle, left, inner, Scaled(24), Scaled(6), ref y);
             Stack(_performance, left, inner, Scaled(40), Scaled(12), ref y);
             Stack(_overclockCard, left, inner, LayoutOverclockCard(cardInner), Scaled(20), ref y);
+            Stack(_gameTitle, left, inner, Scaled(36), Scaled(8), ref y);
+            Stack(_gameCard, left, inner, LayoutGameCard(cardInner), Scaled(20), ref y);
             Stack(_appleTitle, left, inner, Scaled(36), Scaled(8), ref y);
             Stack(_appleCard, left, inner, LayoutAppleCard(cardInner), Scaled(20), ref y);
             Stack(_settingsTitle, left, inner, Scaled(24), Scaled(6), ref y);
@@ -451,6 +545,40 @@ namespace Ayr.Ui
             Stack(_memoryOffset, padding, cardInner, Scaled(44), Scaled(12), ref y);
             Stack(_applyOverclock, padding, cardInner, Scaled(36), padding, ref y);
             return y;
+        }
+
+        private int LayoutGameCard(int cardInner)
+        {
+            int padding = Scaled(CardPadding);
+            int y = padding;
+            LayoutToggleRow(_gameAutomaticRow, _gameToggle, padding, cardInner, ref y);
+            y += Scaled(12);
+            Stack(_gameDivider, padding, cardInner, 1, Scaled(12), ref y);
+            int addedRows = _shownAddedGames.Count;
+            int foundRows = _shownFoundGames.Count;
+            int visibleRows = Math.Max(1, addedRows + foundRows);
+            _gamesFoundLabel.Visible = foundRows > 0;
+            for (int row = 0; row < MaxGameRows; row++)
+            {
+                bool visible = row < visibleRows;
+                _gameRows[row].Visible = visible;
+                if (!visible)
+                {
+                    continue;
+                }
+                if (row == addedRows && foundRows > 0)
+                {
+                    y += addedRows > 0 ? Scaled(6) : 0;
+                    Stack(_gamesFoundLabel, padding, cardInner, Scaled(18), Scaled(6), ref y);
+                }
+                Stack(_gameRows[row], padding, cardInner, Scaled(40), Scaled(6), ref y);
+            }
+            y += Scaled(4);
+            int gap = Scaled(8);
+            int buttonWidth = (cardInner - gap) / 2;
+            _scanGames.SetBounds(padding, y, buttonWidth, Scaled(36));
+            _addGame.SetBounds(padding + buttonWidth + gap, y, cardInner - buttonWidth - gap, Scaled(36));
+            return y + Scaled(36) + padding;
         }
 
         private int LayoutAppleCard(int cardInner)
