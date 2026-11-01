@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 (2026-11-02)
+
+- **Battery health:** the Battery page shows how much charge the battery holds now against when it was new, and says
+  when it needs replacing.
+- **Battery calibration** (experimental): empties and refills the battery once with the charger plugged in, so its
+  percentage is right again. Your charge limit and power plan are put back afterwards, even if Ayr or Windows stops
+  partway. Not offered for a battery below 40% health.
+- Confirmations, the mode popup and the tray tooltip say what changed in plain words.
+- The README shows both screenshots at full size.
+
 ## 0.5.0 (2026-11-01)
 
 - **New window:** a fixed-size window with a page for each area: Performance, Game mode, Battery, iPhone & iPad,
