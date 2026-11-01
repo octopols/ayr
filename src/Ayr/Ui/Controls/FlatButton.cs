@@ -19,6 +19,7 @@ namespace Ayr.Ui.Controls
             _style = style;
             TabStop = true;
             Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.PushButton;
         }
 
         /// <summary>Looks disabled and ignores clicks, but unlike a disabled control it still gets hover, so a tooltip can say why.</summary>
@@ -37,6 +38,9 @@ namespace Ayr.Ui.Controls
         }
 
         private bool Dimmed => !Enabled || _inactive;
+
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new OwnerDrawnAccessibility(this, name: () => Text, states: () => _inactive ? AccessibleStates.Unavailable : AccessibleStates.None);
 
         protected override void OnPaint(PaintEventArgs e)
         {

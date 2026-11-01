@@ -32,6 +32,7 @@ ayrctl tray                          tray icon with the same controls
 ayrctl uninstall                     fans to Auto, remove the logon task and Ayr's driver entries
 " + GameCommands.Usage + @"
 " + AppleCommands.Usage + @"
+" + MsiCommands.Usage + @"
 
 Diagnostics
 ayrctl probe                         read-only register dump
@@ -76,6 +77,8 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     return GameCommand();
                 case "apple":
                     return AppleCommand();
+                case "msi":
+                    return WithElevation(() => new MsiCommands(_output).Execute(_args.Skip(1).Select(argument => argument.ToLowerInvariant()).ToList()));
                 case "supervise":
                     return RunSupervisor();
                 case "sentinel":

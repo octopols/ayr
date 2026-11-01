@@ -49,6 +49,9 @@ namespace Ayr.Ui
 
         public void PlaceNear(TrayAnchor anchor) => Location = anchor.Place(Size, Scaled(AnchorGap));
 
+        public void CenterOver(Form owner) =>
+            Location = new Point(owner.Left + (owner.Width - Width) / 2, owner.Top + (owner.Height - Height) / 2);
+
         protected int Scaled(int pixels) => (int)Math.Round(pixels * _dpiScale);
 
         protected override void OnHandleCreated(EventArgs e)

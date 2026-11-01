@@ -20,10 +20,12 @@ namespace Ayr.Ui.Controls
         private readonly BrandBadge _badge;
         private readonly string _title;
         private readonly string _subtitle;
+        private readonly bool _canMinimize;
         private CaptionButton _hovered = CaptionButton.None;
 
-        public HeaderBand(Theme theme, string title, string subtitle) : base(theme)
+        public HeaderBand(Theme theme, string title, string subtitle, bool canMinimize = true) : base(theme)
         {
+            _canMinimize = canMinimize;
             _title = title;
             _subtitle = subtitle;
             _badge = new BrandBadge(theme);
@@ -53,7 +55,10 @@ namespace Ayr.Ui.Controls
             {
                 graphics.DrawLine(rule, 0, Height - 1, Width, Height - 1);
             }
-            DrawCaptionButton(graphics, CaptionButton.Minimize);
+            if (_canMinimize)
+            {
+                DrawCaptionButton(graphics, CaptionButton.Minimize);
+            }
             DrawCaptionButton(graphics, CaptionButton.Close);
         }
 
@@ -104,7 +109,7 @@ namespace Ayr.Ui.Controls
 
         private CaptionButton HitTest(Point point)
         {
-            if (ButtonBounds(CaptionButton.Minimize).Contains(point))
+            if (_canMinimize && ButtonBounds(CaptionButton.Minimize).Contains(point))
             {
                 return CaptionButton.Minimize;
             }

@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Threading;
 using System.Windows.Forms;
 using Ayr.Agent;
@@ -7,6 +9,7 @@ using Ayr.Apple;
 using Ayr.Controllers;
 using Ayr.Games;
 using Ayr.Hardware;
+using Ayr.MsiRemoval;
 using Ayr.Updates;
 
 namespace Ayr.Ui
@@ -26,6 +29,7 @@ namespace Ayr.Ui
         private readonly UpdateInstaller _installer = new UpdateInstaller();
         private readonly object _oneCallAtATime = new object();
         private readonly object _oneUpdateAtATime = new object();
+        private readonly object _oneMsiTaskAtATime = new object();
 
         public UiBackend(HardwareContext hardware)
         {
@@ -44,21 +48,35 @@ namespace Ayr.Ui
         /// <summary>Like Run for update work, which only waits on the network and must not hold up hardware reads.</summary>
         public void RunUpdate<T>(Control owner, Func<T> work, Action<T, Exception> done) => RunOnPool(owner, work, done, _oneUpdateAtATime);
 
+        /// <summary>Uninstallers can take minutes, so MSI scans and removals have their own queue and never hold up hardware reads.</summary>
+        public void ScanMsiSoftware(Control owner, Action<IReadOnlyList<MsiComponent>, Exception> done) =>
+            RunOnPool(owner, () => new MsiSoftwareScan().Run(), done, _oneMsiTaskAtATime);
+
+        /// <param name="progress">Called on the owner's thread.</param>
+        public void RemoveMsiSoftware(Control owner, IReadOnlyList<MsiComponent> components, bool makeRestorePoint, IRemovalProgress progress,
+            Action<RemovalReport, Exception> done) =>
+            RunOnPool(owner, () => new MsiRemover().Remove(components, makeRestorePoint, new ProgressOnThread(owner, progress)), done, _oneMsiTaskAtATime);
+
         public LiveState ReadLive() => new LiveState(
             _hardware.Fans.ReadMode(),
             _hardware.Performance.ReadLevel(),
             _hardware.Telemetry.Sample(),
             ReadIfAvailable(() => _hardware.KeyboardLight.IsSupported, _hardware.KeyboardLight.ReadLevel));
 
-        public SlowState ReadSlow(bool includeAutostart) => new SlowState(
-            DesiredState.Load(),
-            new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
-            ReadIfAvailable(() => _hardware.ChargeLimit.IsSupported, _hardware.ChargeLimit.ReadPercent),
-            _games.Overview(),
-            _charger.ConnectedStatuses(),
-            _charger.NextRequestAllowedAt,
-            includeAutostart ? _autostart.IsInstalled : (bool?)null,
-            MsiSoftware.IsMsiCenterRunning);
+        public SlowState ReadSlow(bool includeAutostart)
+        {
+            DesiredState desired = DesiredState.Load();
+            return new SlowState(
+                desired,
+                new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
+                ReadIfAvailable(() => _hardware.ChargeLimit.IsSupported, _hardware.ChargeLimit.ReadPercent),
+                _games.Overview(),
+                _charger.ConnectedStatuses(),
+                _charger.NextRequestAllowedAt,
+                includeAutostart ? _autostart.IsInstalled : (bool?)null,
+                MsiSoftware.IsMsiCenterRunning,
+                new FnKeyBindings(desired, MsiSoftware.UsesFnF7));
+        }
 
         public AppleSummary ReadAppleSummary() => new AppleSummary(DesiredState.Load().AppleAutoFastCharge, _charger.ConnectedStatuses());
 
@@ -104,6 +122,18 @@ namespace Ayr.Ui
             return level + " performance applied";
         }
 
+        public string StepPerformance() =>
+            ApplyPerformance(NextAfter(PerformanceController.SelectableLevels, _hardware.Performance.ReadLevel()));
+
+        public string StepFanMode() => ApplyFan(NextAfter(FanController.SelectableModes, _hardware.Fans.ReadMode()));
+
+        public string SetFnKeyAction(FnKey key, FnKeyAction action)
+        {
+            DesiredState.Update(state => state.ChooseFnAction(key, action));
+            ActivityLog.Write("Fn+" + key + " -> " + action);
+            return "Fn+" + key + " updated";
+        }
+
         public string ApplyTurboOffsets(GpuOffsets offsets)
         {
             bool applied = _modes.SetTurboOffsets(offsets);
@@ -122,6 +152,12 @@ namespace Ayr.Ui
                 Supervisor.EnsureBackgroundInstance();
             }
             return on ? "Game mode on" : "Game mode off";
+        }
+
+        public string SetGameProfile(GameProfile profile)
+        {
+            _games.SetProfile(profile);
+            return "Game settings saved";
         }
 
         public string AddGame(GameEntry game)
@@ -207,6 +243,9 @@ namespace Ayr.Ui
             return release.Version;
         }
 
+        /// <summary>Wraps round to the first; a current value that is not in the list (such as Unknown) also gives the first.</summary>
+        private static T NextAfter<T>(ReadOnlyCollection<T> choices, T current) => choices[(choices.IndexOf(current) + 1) % choices.Count];
+
         // Charge limit and keyboard light live only in EC RAM, at addresses known for some firmware only. Where either isn't
         // the case, their controls are simply hidden.
         private static int? ReadIfAvailable(Func<bool> isSupported, Func<int> read)
@@ -256,6 +295,22 @@ namespace Ayr.Ui
             {
                 // The window closed while the work ran; there is nothing left to update.
             }
+        }
+
+        private sealed class ProgressOnThread : IRemovalProgress
+        {
+            private readonly Control _owner;
+            private readonly IRemovalProgress _progress;
+
+            public ProgressOnThread(Control owner, IRemovalProgress progress)
+            {
+                _owner = owner;
+                _progress = progress;
+            }
+
+            public void Starting(MsiComponent component) => Deliver(_owner, () => _progress.Starting(component));
+
+            public void Finished(RemovalResult result) => Deliver(_owner, () => _progress.Finished(result));
         }
     }
 }

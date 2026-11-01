@@ -15,6 +15,7 @@ namespace Ayr.Ui.Controls
         {
             TabStop = true;
             Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.CheckButton;
         }
 
         public event Action<bool> Toggled;
@@ -28,9 +29,13 @@ namespace Ayr.Ui.Controls
                 {
                     _checked = value;
                     Invalidate();
+                    AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
                 }
             }
         }
+
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new OwnerDrawnAccessibility(this, states: () => _checked ? AccessibleStates.Checked : AccessibleStates.None);
 
         protected override void OnPaint(PaintEventArgs e)
         {

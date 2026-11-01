@@ -10,7 +10,8 @@ namespace Ayr.Ui
     public sealed class SlowState
     {
         public SlowState(DesiredState desired, CurveTemperatures curveTemperatures, int? chargeLimitPercent, GameOverview games,
-            IReadOnlyList<AppleDeviceStatus> appleDevices, DateTime nextAppleRequestAllowedAt, bool? autostartOn, bool msiCenterRunning)
+            IReadOnlyList<AppleDeviceStatus> appleDevices, DateTime nextAppleRequestAllowedAt, bool? autostartOn, bool msiCenterRunning,
+            FnKeyBindings fnKeys)
         {
             Desired = desired;
             CurveTemperatures = curveTemperatures;
@@ -20,6 +21,7 @@ namespace Ayr.Ui
             NextAppleRequestAllowedAt = nextAppleRequestAllowedAt;
             AutostartOn = autostartOn;
             MsiCenterRunning = msiCenterRunning;
+            FnKeys = fnKeys;
         }
 
         public DesiredState Desired { get; }
@@ -36,5 +38,6 @@ namespace Ayr.Ui
         public bool? AutostartOn { get; }
 
         public bool MsiCenterRunning { get; }
+        public FnKeyBindings FnKeys { get; }
     }
 }

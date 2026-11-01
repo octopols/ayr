@@ -5,7 +5,7 @@ using System.Windows.Forms;
 
 namespace Ayr.Ui.Controls
 {
-    /// <summary>Raises Picked for user choices only, never when SelectedIndex is set from code.</summary>
+    /// <summary>One row of choices. Raises Picked for user choices only, never when SelectedIndex is set from code.</summary>
     public sealed class Segmented : ThemedControl
     {
         private const int None = -1;
@@ -14,17 +14,19 @@ namespace Ayr.Ui.Controls
         private const float SelectionInset = 3;
 
         private readonly IReadOnlyList<string> _items;
-        private readonly int _columns;
         private int _selected = None;
         private int _hovered = None;
 
-        public Segmented(Theme theme, IReadOnlyList<string> items, int columns) : base(theme)
+        public Segmented(Theme theme, IReadOnlyList<string> items) : base(theme)
         {
             _items = items;
-            _columns = columns;
             TabStop = true;
             Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.List;
         }
+
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new OwnerDrawnAccessibility(this, value: () => _selected == None ? "" : _items[_selected]);
 
         public event Action<int> Picked;
 
@@ -40,8 +42,6 @@ namespace Ayr.Ui.Controls
                 }
             }
         }
-
-        private int Rows => (_items.Count + _columns - 1) / _columns;
 
         protected override void OnPaint(PaintEventArgs e)
         {
@@ -137,9 +137,8 @@ namespace Ayr.Ui.Controls
 
         private RectangleF Cell(int index)
         {
-            float width = (Width - 1) / (float)_columns;
-            float height = (Height - 1) / (float)Rows;
-            return new RectangleF(index % _columns * width, index / _columns * height, width, height);
+            float width = (Width - 1) / (float)_items.Count;
+            return new RectangleF(index * width, 0, width, Height - 1);
         }
 
         private int HitTest(Point point)

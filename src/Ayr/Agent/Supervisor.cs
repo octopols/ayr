@@ -43,6 +43,7 @@ namespace Ayr.Agent
         private volatile bool _resumePending;
         private GameWatcher _games;
         private string _activeGame;
+        private GameProfile _activeProfile;
         private DateTime _nextGameWatchAttempt = DateTime.MinValue;
 
         public Supervisor(HardwareContext hardware, bool stayAliveWhenIdle, Action<string> notify)
@@ -129,10 +130,12 @@ namespace Ayr.Agent
                     {
                         WatchApple();
                     }
-                    bool turboWanted = desired.Performance == PerformanceLevel.Turbo || _activeGame != null;
-                    if (turboWanted && tick % GpuCheckEveryTicks == 0)
+                    bool gaming = _activeGame != null;
+                    PerformanceLevel wantedLevel = gaming ? desired.GameProfile.Performance : desired.Performance;
+                    GpuOffsets wantedOffsets = gaming ? desired.GameProfile.OffsetsFrom(desired.TurboOffsets) : desired.TurboOffsets;
+                    if (wantedLevel == PerformanceLevel.Turbo && tick % GpuCheckEveryTicks == 0)
                     {
-                        KeepTurboOffsets(desired.TurboOffsets);
+                        KeepTurboOffsets(wantedOffsets);
                     }
                 }
             }
@@ -244,6 +247,11 @@ namespace Ayr.Agent
                 string game = _games?.RunningGame();
                 if (game == _activeGame)
                 {
+                    // A change to the game settings mid-game shows up at once rather than at the next game.
+                    if (game != null && !desired.GameProfile.Equals(_activeProfile))
+                    {
+                        EnterGameMode(game, desired);
+                    }
                     return;
                 }
                 if (game != null)
@@ -267,7 +275,7 @@ namespace Ayr.Agent
         {
             ApplyGameProfile(desired);
             _activeGame = game;
-            ActivityLog.Write("game mode on: " + game + " (" + GameModeController.GamingPerformance + " " + desired.TurboOffsets + ", fans " + GameModeController.GamingFan + ")");
+            ActivityLog.Write("game mode on: " + game + " (" + desired.GameProfile + ")");
         }
 
         private void LeaveGameMode(DesiredState desired)
@@ -275,6 +283,7 @@ namespace Ayr.Agent
             ApplyEveryday(desired);
             ActivityLog.Write("game mode off: " + _activeGame + " closed; back to fan " + desired.Fan + ", perf " + desired.Performance);
             _activeGame = null;
+            _activeProfile = null;
         }
 
         // Leaving the PC in the game profile after Ayr exits would quietly keep it loud and hot.
@@ -329,8 +338,10 @@ namespace Ayr.Agent
 
         private void ApplyGameProfile(DesiredState desired)
         {
-            _hardware.Fans.Apply(GameModeController.GamingFan, desired.CustomCurves);
-            _hardware.Performance.Apply(GameModeController.GamingPerformance, desired.TurboOffsets);
+            GameProfile profile = desired.GameProfile;
+            _hardware.Fans.Apply(profile.Fan, desired.CustomCurves);
+            _hardware.Performance.Apply(profile.Performance, profile.OffsetsFrom(desired.TurboOffsets));
+            _activeProfile = profile;
         }
 
         private void ApplyEveryday(DesiredState desired)

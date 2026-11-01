@@ -17,7 +17,7 @@ namespace Ayr.Ui.Controls
             _caption = caption;
             _formatValue = formatValue;
             BackColor = theme.Surface;
-            _slider = new FlatSlider(theme, minimum, maximum) { BackColor = theme.Surface };
+            _slider = new FlatSlider(theme, minimum, maximum) { BackColor = theme.Surface, AccessibleName = caption };
             _slider.ValueChanged += value =>
             {
                 Invalidate();
