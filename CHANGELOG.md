@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 (2026-11-02)
+
+- **Battery facts:** under the health verdict, the Battery page lists the battery's capacity, the week it last ran the
+  laptop (from Windows' own records) and, since batteries don't report their age, the laptop's BIOS date. A capacity
+  is marked "likely lower" when the battery hasn't run the laptop for two months. Windows' records are read only when
+  the Battery page is opened.
+- **Charge limit:** when the battery is above the limit, the page says it won't charge until it's used below it. A
+  limit stops charging; it doesn't drain the battery.
+- The calibration card fits its text, and screen readers read the battery facts.
+
 ## 0.6.0 (2026-11-02)
 
 - **Battery health:** the Battery page shows how much charge the battery holds now against when it was new, and says
