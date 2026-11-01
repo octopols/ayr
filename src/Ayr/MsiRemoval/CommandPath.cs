@@ -4,12 +4,13 @@ using System.IO;
 namespace Ayr.MsiRemoval
 {
     /// <summary>
-    /// The program a command line or a service's ImagePath runs. These come in many shapes: quoted or not, with
-    /// arguments, with environment variables, or in the kernel's "\??\" and "System32\drivers\..." forms. A bare name such
-    /// as "MsiExec.exe" is returned as is, for Windows to find on the PATH.
+    /// Splits a command line or a service's ImagePath into its program and arguments. These come in many shapes: quoted
+    /// or not, with environment variables, or in the kernel's "\??\" and "System32\drivers\..." forms. A bare name such as
+    /// "MsiExec.exe" is returned as is, for Windows to find on the PATH.
     /// </summary>
     public static class CommandPath
     {
+        private const char Quote = '"';
         private const string KernelPrefix = @"\??\";
         private const string SystemRootPrefix = @"\SystemRoot\";
         private const string SystemFolderPrefix = @"System32\";
@@ -22,39 +23,37 @@ namespace Ayr.MsiRemoval
             {
                 return null;
             }
-            string expanded = Environment.ExpandEnvironmentVariables(command.Trim());
-            string program = expanded.StartsWith("\"") ? Quoted(expanded) : Unquoted(expanded);
-            return Absolute(program);
+            string expanded = Expand(command);
+            return Absolute(expanded.Substring(0, ProgramEnd(expanded)).Trim(Quote));
         }
 
-        /// <summary>What follows the program: the arguments, without surrounding spaces.</summary>
         public static string ArgumentsOf(string command)
         {
-            string expanded = Environment.ExpandEnvironmentVariables(command.Trim());
-            int end = expanded.StartsWith("\"") ? expanded.IndexOf('"', 1) + 1 : Unquoted(expanded).Length;
-            return end <= 0 || end >= expanded.Length ? "" : expanded.Substring(end).Trim();
+            string expanded = Expand(command);
+            return expanded.Substring(ProgramEnd(expanded)).Trim();
         }
 
-        private static string Quoted(string command)
-        {
-            int closing = command.IndexOf('"', 1);
-            return closing < 0 ? command.Substring(1) : command.Substring(1, closing - 1);
-        }
+        private static string Expand(string command) => Environment.ExpandEnvironmentVariables(command.Trim());
 
-        // Unquoted paths may contain spaces, so the program ends at its extension rather than at the first space.
-        private static string Unquoted(string command)
+        // Unquoted paths may contain spaces, so an unquoted program ends at its extension rather than at the first space.
+        private static int ProgramEnd(string command)
         {
+            if (command.Length > 0 && command[0] == Quote)
+            {
+                int closing = command.IndexOf(Quote, 1);
+                return closing < 0 ? command.Length : closing + 1;
+            }
             foreach (string extension in ProgramExtensions)
             {
                 int index = command.IndexOf(extension, StringComparison.OrdinalIgnoreCase);
                 int end = index + extension.Length;
                 if (index > 0 && (end == command.Length || command[end] == ' '))
                 {
-                    return command.Substring(0, end);
+                    return end;
                 }
             }
             int space = command.IndexOf(' ');
-            return space < 0 ? command : command.Substring(0, space);
+            return space < 0 ? command.Length : space;
         }
 
         private static string Absolute(string program)

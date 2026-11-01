@@ -19,7 +19,7 @@ namespace Ayr.MsiRemoval.Components
             _valueName = valueName;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             backup.Export(_hive, _view, _runKey);
             using (RegistryKey root = RegistryKey.OpenBaseKey(_hive, _view))
@@ -27,7 +27,7 @@ namespace Ayr.MsiRemoval.Components
             {
                 run?.DeleteValue(_valueName, throwOnMissingValue: false);
             }
-            return RemovalOutcome.Removed;
+            return RemovalCompletion.Now;
         }
     }
 }

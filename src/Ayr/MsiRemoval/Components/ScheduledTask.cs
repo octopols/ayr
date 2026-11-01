@@ -14,10 +14,10 @@ namespace Ayr.MsiRemoval.Components
             _taskPath = taskPath;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             new ExternalCommand("schtasks.exe", "/Delete /TN \"" + _taskPath + "\" /F").RunOrThrow(DeleteTimeout);
-            return RemovalOutcome.Removed;
+            return RemovalCompletion.Now;
         }
     }
 }

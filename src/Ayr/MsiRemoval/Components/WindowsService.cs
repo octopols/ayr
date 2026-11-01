@@ -27,9 +27,9 @@ namespace Ayr.MsiRemoval.Components
             _binaryPath = binaryPath;
         }
 
-        public static string RegistryKeyOf(string serviceName) => @"SYSTEM\CurrentControlSet\Services\" + serviceName;
+        private static string RegistryKeyOf(string serviceName) => @"SYSTEM\CurrentControlSet\Services\" + serviceName;
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             backup.Export(RegistryHive.LocalMachine, RegistryView.Registry64, RegistryKeyOf(_serviceName));
             bool isDriver = Kind == MsiComponentKind.Driver;
@@ -39,7 +39,7 @@ namespace Ayr.MsiRemoval.Components
             }
             DeleteRegistration(disableFirst: isDriver);
             bool fileDeferred = File.Exists(_binaryPath) && FileEraser.DeleteFile(_binaryPath);
-            return isDriver || fileDeferred ? RemovalOutcome.RemovedAtRestart : RemovalOutcome.Removed;
+            return isDriver || fileDeferred ? RemovalCompletion.AtRestart : RemovalCompletion.Now;
         }
 
         private void StopIfRunning()

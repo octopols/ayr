@@ -5,17 +5,20 @@ namespace Ayr.MsiRemoval.Components
     /// <summary>One of MSI's top-level folders, with everything its programs left in it.</summary>
     public sealed class MsiFolder : MsiComponent
     {
+        private readonly string _path;
+
         public MsiFolder(string path) : base(MsiComponentKind.Folder, "MSI files", path)
         {
+            _path = path;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
-            if (!Directory.Exists(Location))
+            if (!Directory.Exists(_path))
             {
-                return RemovalOutcome.Removed;
+                return RemovalCompletion.Now;
             }
-            return FileEraser.DeleteFolder(Location) ? RemovalOutcome.RemovedAtRestart : RemovalOutcome.Removed;
+            return FileEraser.DeleteFolder(_path) ? RemovalCompletion.AtRestart : RemovalCompletion.Now;
         }
     }
 }

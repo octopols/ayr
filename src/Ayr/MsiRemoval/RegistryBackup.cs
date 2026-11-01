@@ -17,16 +17,16 @@ namespace Ayr.MsiRemoval
 
         public RegistryBackup()
         {
-            Directory = Path.Combine(AppPaths.DataDirectory, "msi-removal", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-            System.IO.Directory.CreateDirectory(Directory);
+            Folder = Path.Combine(AppPaths.DataDirectory, "msi-removal", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
+            Directory.CreateDirectory(Folder);
         }
 
-        public string Directory { get; }
+        public string Folder { get; }
 
         public void Export(RegistryHive hive, RegistryView view, string subKey)
         {
             _exported++;
-            string file = Path.Combine(Directory, _exported.ToString("D3") + " " + Path.GetFileName(subKey.TrimEnd('\\')) + ".reg");
+            string file = Path.Combine(Folder, _exported.ToString("D3") + " " + Path.GetFileName(subKey.TrimEnd('\\')) + ".reg");
             string arguments = "export \"" + HiveName(hive) + "\\" + subKey + "\" \"" + file + "\" /y " + ViewSwitch(view);
             new ExternalCommand("reg.exe", arguments).RunOrThrow(ExportTimeout);
         }

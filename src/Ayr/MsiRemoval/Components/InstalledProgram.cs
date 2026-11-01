@@ -41,7 +41,7 @@ namespace Ayr.MsiRemoval.Components
         /// <summary>Afterburner and Kombustor are GPU tools people use on any brand of laptop, so they are only removed on request.</summary>
         public override bool SelectedByDefault => !StandaloneTools.Any(tool => Name.IndexOf(tool, StringComparison.OrdinalIgnoreCase) >= 0);
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             backup.Export(_hive, _view, _entryKey);
             if (_uninstaller != null && !InstallsAppleChargeDriver)
@@ -55,16 +55,16 @@ namespace Ayr.MsiRemoval.Components
                     root.DeleteSubKeyTree(_entryKey, throwOnMissingSubKey: false);
                 }
             }
-            bool deferred = InstallFolderExists && FileEraser.DeleteFolder(_installFolder);
-            return deferred ? RemovalOutcome.RemovedAtRestart : RemovalOutcome.Removed;
+            bool deferred = HasMsiInstallFolder && FileEraser.DeleteFolder(_installFolder);
+            return deferred ? RemovalCompletion.AtRestart : RemovalCompletion.Now;
         }
 
-        private bool InstallFolderExists => !string.IsNullOrEmpty(_installFolder) && Directory.Exists(_installFolder) && MicroStar.IsInMsiFolder(_installFolder);
+        private bool HasMsiInstallFolder => !string.IsNullOrEmpty(_installFolder) && Directory.Exists(_installFolder) && MicroStar.IsInMsiFolder(_installFolder);
 
         // The name is checked too, in case the entry doesn't say where it was installed.
         private bool InstallsAppleChargeDriver =>
             (Name.IndexOf("Super", StringComparison.OrdinalIgnoreCase) >= 0 && Name.IndexOf("Charger", StringComparison.OrdinalIgnoreCase) >= 0)
-            || (InstallFolderExists && Directory.EnumerateFiles(_installFolder, AppleChargeDriverPattern, SearchOption.AllDirectories).Any());
+            || (HasMsiInstallFolder && Directory.EnumerateFiles(_installFolder, AppleChargeDriverPattern, SearchOption.AllDirectories).Any());
 
         private bool EntryExists
         {

@@ -12,6 +12,9 @@ namespace Ayr.Ui.Pages
     /// </summary>
     public sealed class PerformancePage : WindowPage
     {
+        private const string ApplyLabel = "Apply";
+        private const string SavedLabel = "Saved";
+
         private static readonly Dictionary<PerformanceLevel, string> LevelMeanings = new Dictionary<PerformanceLevel, string>
         {
             [PerformanceLevel.Turbo] = "Highest power for CPU and GPU, plus your GPU overclock. Hottest and loudest.",
@@ -42,9 +45,6 @@ namespace Ayr.Ui.Pages
         private readonly Card _overclockCard;
         private readonly LabeledSlider _coreOffset, _memoryOffset;
         private readonly FlatButton _applyOverclock;
-
-        private const string ApplyLabel = "Apply";
-        private const string SavedLabel = "Saved";
 
         private SlowState _slow;
         private bool _customFanSelected;

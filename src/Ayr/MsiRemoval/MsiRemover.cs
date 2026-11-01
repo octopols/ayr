@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using Ayr.App;
@@ -33,7 +34,7 @@ namespace Ayr.MsiRemoval
                 results.Add(result);
                 progress.Finished(result);
             }
-            return new RemovalReport(results, restorePoint, backup.Directory);
+            return new RemovalReport(results, restorePoint, backup.Folder);
         }
 
         private static RestorePointStatus MakeRestorePoint() =>
@@ -58,14 +59,14 @@ namespace Ayr.MsiRemoval
         {
             try
             {
-                RemovalOutcome outcome = component.Remove(backup);
-                ActivityLog.Write("MSI removal: " + component.Kind + " " + component.Name + " (" + component.Location + "): " + outcome);
-                return new RemovalResult(component, outcome, null);
+                RemovalCompletion completion = component.Remove(backup);
+                ActivityLog.Write("MSI removal: " + component.Kind + " " + component.Name + " (" + component.Location + "): removed " + completion);
+                return RemovalResult.Succeeded(component, completion);
             }
             catch (Exception ex)
             {
                 ActivityLog.Write("MSI removal: " + component.Kind + " " + component.Name + " failed: " + ex);
-                return new RemovalResult(component, RemovalOutcome.Failed, ExceptionText.Of(ex));
+                return RemovalResult.Failed(component, ExceptionText.Of(ex));
             }
         }
 
@@ -83,7 +84,7 @@ namespace Ayr.MsiRemoval
                     }
                     ActivityLog.Write("MSI removal: closed " + process.Value);
                 }
-                catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is System.ComponentModel.Win32Exception)
+                catch (Exception ex) when (ex is ArgumentException || ex is InvalidOperationException || ex is Win32Exception)
                 {
                     ActivityLog.Write("MSI removal: could not close " + process.Value + ": " + ex.Message);
                 }

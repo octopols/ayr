@@ -17,14 +17,14 @@ namespace Ayr.MsiRemoval.Components
             _key = key;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             backup.Export(_hive, _view, _key);
             using (RegistryKey root = RegistryKey.OpenBaseKey(_hive, _view))
             {
                 root.DeleteSubKeyTree(_key, throwOnMissingSubKey: false);
             }
-            return RemovalOutcome.Removed;
+            return RemovalCompletion.Now;
         }
     }
 }

@@ -18,7 +18,7 @@ namespace Ayr.MsiRemoval
 
         public virtual bool SelectedByDefault => true;
 
-        /// <summary>Throws when it could not be removed; anything already changed stays changed and is backed up.</summary>
-        public abstract RemovalOutcome Remove(RegistryBackup backup);
+        /// <summary>Throws when it can't be removed; whatever was already changed stays changed, and is backed up.</summary>
+        public abstract RemovalCompletion Remove(RegistryBackup backup);
     }
 }

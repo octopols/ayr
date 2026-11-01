@@ -17,10 +17,10 @@ namespace Ayr.MsiRemoval.Components
             _infName = infName;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             new ExternalCommand("pnputil.exe", "/delete-driver " + _infName + " /uninstall /force").RunOrThrow(DeleteTimeout);
-            return RemovalOutcome.Removed;
+            return RemovalCompletion.Now;
         }
     }
 }

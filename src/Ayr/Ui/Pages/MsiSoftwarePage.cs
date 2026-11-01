@@ -32,13 +32,6 @@ namespace Ayr.Ui.Pages
             Finished
         }
 
-        private enum Group
-        {
-            Apps,
-            ServicesAndDrivers,
-            Leftovers
-        }
-
         private sealed class Entry
         {
             public Entry(MsiComponent component, SelectableRow row)
@@ -49,57 +42,83 @@ namespace Ayr.Ui.Pages
 
             public MsiComponent Component { get; }
             public SelectableRow Row { get; }
-            public Group Group => GroupOf(Component.Kind);
+            public MsiComponentGroup Group => MsiComponentGroups.Of(Component.Kind);
+        }
+
+        /// <summary>Shows on each row where the removal has got to, and the overall count below the list.</summary>
+        private sealed class RowProgress : IRemovalProgress
+        {
+            private readonly IReadOnlyList<Entry> _entries;
+            private readonly MutedText _status;
+            private int _started;
+
+            public RowProgress(IReadOnlyList<Entry> entries, MutedText status)
+            {
+                _entries = entries;
+                _status = status;
+            }
+
+            public void Starting(MsiComponent component)
+            {
+                _started++;
+                _status.Text = "Removing " + _started + " of " + _entries.Count + ": " + component.Name;
+                Show(component, "Removing…");
+            }
+
+            public void Finished(RemovalResult result) => Show(result.Component, MsiRemovalText.Outcome(result));
+
+            private void Show(MsiComponent component, string detail) =>
+                _entries.First(entry => entry.Component == component).Row.SetText(component.Name, detail);
         }
 
         private readonly TitleWithSubtitle _title;
         private readonly Card _card;
+        private readonly TitleWithSubtitle _nothingFound;
         private readonly TitleWithSubtitle _selectAllRow;
         private readonly ToggleSwitch _selectAll;
         private readonly Panel _divider;
         private readonly ScrollViewport _viewport;
         private readonly Panel _list;
-        private readonly Dictionary<Group, MutedText> _headings = new Dictionary<Group, MutedText>();
+        private readonly Dictionary<MsiComponentGroup, MutedText> _headings = new Dictionary<MsiComponentGroup, MutedText>();
         private readonly Panel _footerDivider;
         private readonly TitleWithSubtitle _restorePointRow;
         private readonly ToggleSwitch _restorePoint;
         private readonly MutedText _status;
+        private readonly FlatButton _openBackup;
         private readonly FlatButton _scan;
         private readonly FlatButton _remove;
-        private readonly FlatButton _openBackup;
-        private readonly TitleWithSubtitle _nothingFound;
         private readonly List<Entry> _entries = new List<Entry>();
 
         private Stage _stage = Stage.NotScanned;
-        private string _backupFolder;
         private bool _scanFailed;
+        private string _backupFolder;
 
         public MsiSoftwarePage(Theme theme, IPageHost host) : base(theme, host)
         {
             _title = Add(SectionTitle("MSI software", "MSI's apps and services undo your settings in the background. Choose what to remove."));
             _card = Add(new Card(theme));
+            _nothingFound = AddTo(_card, Row("No MSI software on this PC", "Nothing in the background is undoing your settings."));
             _selectAllRow = AddTo(_card, Row("Select all", null));
             _selectAll = AddTo(_card, SwitchFor(_selectAllRow));
             _selectAll.Toggled += SelectAll;
             _divider = AddTo(_card, new Panel { BackColor = theme.Border });
             _viewport = AddTo(_card, new ScrollViewport());
             _list = AddTo(_viewport, new Panel());
-            foreach (Group group in Enum.GetValues(typeof(Group)))
+            foreach (MsiComponentGroup group in Enum.GetValues(typeof(MsiComponentGroup)))
             {
-                _headings[group] = AddTo(_list, new MutedText(theme, HeadingOf(group), theme.Surface));
+                _headings[group] = AddTo(_list, new MutedText(theme, MsiComponentGroups.Heading(group), theme.Surface));
             }
             _footerDivider = AddTo(_card, new Panel { BackColor = theme.Border });
             _restorePointRow = AddTo(_card, Row("Make a restore point first", "Takes longer, and only works if System Restore is turned on"));
             _restorePoint = AddTo(_card, SwitchFor(_restorePointRow));
             _restorePoint.Toggled += on => _restorePoint.Checked = on;
             _status = AddTo(_card, new MutedText(theme, "", theme.Surface));
+            _openBackup = AddTo(_card, new FlatButton(theme, "Open backup", ButtonStyle.Secondary) { Visible = false });
+            _openBackup.Click += (sender, e) => Process.Start("explorer.exe", "\"" + _backupFolder + "\"")?.Dispose();
             _scan = AddTo(_card, new FlatButton(theme, "Scan again", ButtonStyle.Secondary));
             _scan.Click += (sender, e) => Scan();
             _remove = AddTo(_card, new FlatButton(theme, RemoveLabel, ButtonStyle.Primary));
             _remove.Click += (sender, e) => OnRemoveClicked();
-            _nothingFound = AddTo(_card, Row("No MSI software on this PC", "Nothing in the background is undoing your settings."));
-            _openBackup = AddTo(_card, new FlatButton(theme, "Open backup", ButtonStyle.Secondary) { Visible = false });
-            _openBackup.Click += (sender, e) => Process.Start("explorer.exe", "\"" + _backupFolder + "\"")?.Dispose();
             ShowStage(Stage.NotScanned);
         }
 
@@ -109,6 +128,15 @@ namespace Ayr.Ui.Pages
         public override string Title => "MSI software";
 
         public override IEnumerable<Control> Inputs => new Control[] { _scan, _remove, _selectAll, _restorePoint };
+
+        private bool HasItems => _entries.Count > 0;
+
+        private bool AllSelected => HasItems && _entries.All(entry => entry.Row.Selected);
+
+        private IReadOnlyList<Entry> SelectedEntries => _entries.Where(entry => entry.Row.Selected).ToList();
+
+        // Results are delivered through the window: a page that has never been shown has no handle to deliver them to.
+        private Control Window => FindForm() ?? (Control)this;
 
         public void ScanOnce()
         {
@@ -124,13 +152,13 @@ namespace Ayr.Ui.Pages
             int width = Width - 2 * padding;
             int y = padding;
             Stack(_title, padding, width, Scale(38), Scale(16), ref y);
-            bool hasItems = _entries.Count > 0;
-            foreach (Control choosing in new Control[] { _selectAllRow, _selectAll, _divider, _viewport, _footerDivider, _restorePointRow, _restorePoint, _remove })
+            foreach (Control choiceControl in new Control[] { _selectAllRow, _selectAll, _divider, _viewport, _footerDivider, _restorePointRow, _restorePoint, _remove })
             {
-                choosing.Visible = hasItems;
+                choiceControl.Visible = HasItems;
             }
-            _nothingFound.Visible = !hasItems && _stage != Stage.Scanning && !_scanFailed;
-            if (hasItems)
+            _nothingFound.Visible = !HasItems && _stage != Stage.Scanning && !_scanFailed;
+            _status.Visible = HasItems || !_nothingFound.Visible;
+            if (HasItems)
             {
                 _card.SetBounds(padding, y, width, Height - padding - y);
                 LayoutChoices(width);
@@ -141,59 +169,73 @@ namespace Ayr.Ui.Pages
             }
         }
 
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (Visible)
+            {
+                ScanOnce();
+            }
+        }
+
         // With nothing to remove, the card says so and offers only a new scan.
         private int LayoutNothingFound(int width)
         {
-            int cardPadding = Scale(CardPadding);
-            int inner = width - 2 * cardPadding;
+            int padding = Scale(CardPadding);
+            int inner = width - 2 * padding;
             int scanWidth = Scale(110);
             int rowHeight = Scale(38);
-            _nothingFound.SetBounds(cardPadding, cardPadding, inner - scanWidth - Scale(12), rowHeight);
-            _scan.SetBounds(cardPadding + inner - scanWidth, cardPadding + Scale(2), scanWidth, Scale(34));
-            _status.SetBounds(cardPadding, cardPadding, inner - scanWidth - Scale(12), rowHeight);
-            _status.Visible = !_nothingFound.Visible;
-            return rowHeight + 2 * cardPadding;
+            int textWidth = inner - scanWidth - Scale(12);
+            _nothingFound.SetBounds(padding, padding, textWidth, rowHeight);
+            _status.SetBounds(padding, padding, textWidth, rowHeight);
+            _scan.SetBounds(padding + inner - scanWidth, padding + Scale(2), scanWidth, Scale(34));
+            return rowHeight + 2 * padding;
         }
 
         private void LayoutChoices(int width)
         {
-            int cardPadding = Scale(CardPadding);
-            int inner = width - 2 * cardPadding;
-            int cardY = cardPadding;
-            _status.Visible = true;
-            LayoutToggleRow(_selectAllRow, _selectAll, cardPadding, inner, ref cardY);
-            cardY += Scale(10);
-            Stack(_divider, cardPadding, inner, 1, Scale(10), ref cardY);
+            int padding = Scale(CardPadding);
+            int inner = width - 2 * padding;
+            int listTop = padding;
+            LayoutToggleRow(_selectAllRow, _selectAll, padding, inner, ref listTop);
+            listTop += Scale(10);
+            Stack(_divider, padding, inner, 1, Scale(10), ref listTop);
 
-            int buttonHeight = Scale(34);
-            int footerTop = _card.Height - cardPadding - buttonHeight;
-            int removeWidth = Scale(150);
-            int scanWidth = Scale(110);
-            _remove.SetBounds(cardPadding + inner - removeWidth, footerTop, removeWidth, buttonHeight);
-            _scan.SetBounds(_remove.Left - Scale(8) - scanWidth, footerTop, scanWidth, buttonHeight);
-            int backupWidth = Scale(120);
-            _openBackup.SetBounds(_scan.Left - Scale(8) - backupWidth, footerTop, backupWidth, buttonHeight);
-            int statusRight = _openBackup.Visible ? _openBackup.Left : _scan.Left;
-            _status.SetBounds(cardPadding, footerTop, statusRight - Scale(12) - cardPadding, buttonHeight);
+            int footerTop = LayoutFooter(padding, inner);
             int restorePointTop = footerTop - Scale(12) - Scale(38);
-            int restorePointY = restorePointTop;
-            LayoutToggleRow(_restorePointRow, _restorePoint, cardPadding, inner, ref restorePointY);
-            _footerDivider.SetBounds(cardPadding, restorePointTop - Scale(10), inner, 1);
-            int listHeight = restorePointTop - Scale(20) - cardY;
-            _viewport.SetBounds(cardPadding, cardY, inner, listHeight);
+            int restorePointBottom = restorePointTop;
+            LayoutToggleRow(_restorePointRow, _restorePoint, padding, inner, ref restorePointBottom);
+            _footerDivider.SetBounds(padding, restorePointTop - Scale(10), inner, 1);
+
+            int listHeight = restorePointTop - Scale(20) - listTop;
+            _viewport.SetBounds(padding, listTop, inner, listHeight);
             LayoutList(inner, listHeight);
+        }
+
+        /// <summary>Lays out the status line and buttons along the bottom of the card and returns their top.</summary>
+        private int LayoutFooter(int padding, int inner)
+        {
+            int buttonHeight = Scale(34);
+            int top = _card.Height - padding - buttonHeight;
+            int gap = Scale(8);
+            _remove.SetBounds(padding + inner - Scale(150), top, Scale(150), buttonHeight);
+            _scan.SetBounds(_remove.Left - gap - Scale(110), top, Scale(110), buttonHeight);
+            _openBackup.SetBounds(_scan.Left - gap - Scale(120), top, Scale(120), buttonHeight);
+            int statusRight = _openBackup.Visible ? _openBackup.Left : _scan.Left;
+            _status.SetBounds(padding, top, statusRight - Scale(12) - padding, buttonHeight);
+            return top;
         }
 
         // The rows take the full width until they overflow, then make room for the scrollbar.
         private void LayoutList(int width, int visibleHeight)
         {
-            List<IGrouping<Group, Entry>> groups = _entries.GroupBy(entry => entry.Group).ToList();
+            List<IGrouping<MsiComponentGroup, Entry>> groups = _entries.GroupBy(entry => entry.Group).ToList();
             int contentHeight = groups.Count * Scale(HeadingHeight) + _entries.Count * Scale(RowHeight + RowGap);
             int rowWidth = contentHeight > visibleHeight ? width - SystemInformation.VerticalScrollBarWidth : width;
             int y = 0;
-            foreach (KeyValuePair<Group, MutedText> heading in _headings)
+            foreach (KeyValuePair<MsiComponentGroup, MutedText> heading in _headings)
             {
-                IGrouping<Group, Entry> group = groups.FirstOrDefault(candidate => candidate.Key == heading.Key);
+                IGrouping<MsiComponentGroup, Entry> group = groups.FirstOrDefault(candidate => candidate.Key == heading.Key);
                 heading.Value.Visible = group != null;
                 if (group == null)
                 {
@@ -208,23 +250,14 @@ namespace Ayr.Ui.Pages
             _list.SetBounds(0, _list.Top, rowWidth, y);
         }
 
-        protected override void OnVisibleChanged(EventArgs e)
-        {
-            base.OnVisibleChanged(e);
-            if (Visible)
-            {
-                ScanOnce();
-            }
-        }
-
         private void Scan()
         {
             ShowStage(Stage.Scanning);
             ContentChanged();
-            Host.Backend.ScanMsiSoftware(Owner, (components, error) =>
+            Host.Backend.ScanMsiSoftware(Window, (components, error) =>
             {
                 _scanFailed = error != null;
-                ShowComponents(error == null ? components : new MsiComponent[0]);
+                ShowComponents(_scanFailed ? Array.Empty<MsiComponent>() : components);
                 ShowStage(Stage.Choosing);
                 if (_scanFailed)
                 {
@@ -242,15 +275,14 @@ namespace Ayr.Ui.Pages
                 entry.Row.Dispose();
             }
             _entries.Clear();
-            foreach (MsiComponent component in components.OrderBy(component => GroupOf(component.Kind)))
+            foreach (MsiComponent component in components.OrderBy(component => MsiComponentGroups.Of(component.Kind)))
             {
                 var row = new SelectableRow(Theme) { Selected = component.SelectedByDefault };
-                row.SetText(component.Name, KindLabel(component.Kind) + " · " + component.Location);
+                row.SetText(component.Name, MsiRemovalText.Detail(component));
                 row.SelectionChanged += OnSelectionChanged;
                 _list.Controls.Add(row);
                 _entries.Add(new Entry(component, row));
             }
-            ContentChanged();
         }
 
         private void SelectAll(bool selected)
@@ -268,7 +300,7 @@ namespace Ayr.Ui.Pages
             {
                 ShowStage(Stage.Choosing);
             }
-            _selectAll.Checked = _entries.Count > 0 && _entries.All(entry => entry.Row.Selected);
+            _selectAll.Checked = AllSelected;
             _remove.Inactive = SelectedEntries.Count == 0;
         }
 
@@ -293,22 +325,22 @@ namespace Ayr.Ui.Pages
             {
                 entry.Row.SetText(entry.Component.Name, "In line to be removed");
             }
-            Host.Backend.RemoveMsiSoftware(Owner, selected.Select(entry => entry.Component).ToList(), makeRestorePoint,
+            Host.Backend.RemoveMsiSoftware(Window, selected.Select(entry => entry.Component).ToList(), makeRestorePoint,
                 new RowProgress(selected, _status),
                 (report, error) =>
                 {
                     _backupFolder = report?.BackupFolder;
                     ShowStage(Stage.Finished);
-                    _status.Text = error != null ? "Nothing was removed. " + ExceptionText.Of(error) : Summary(report);
-                    int left = error != null ? _entries.Count : _entries.Count - selected.Count + report.FailedCount;
-                    SoftwareCounted?.Invoke(left);
+                    if (error != null)
+                    {
+                        _status.Text = "Nothing was removed. " + ExceptionText.Of(error);
+                        SoftwareCounted?.Invoke(_entries.Count);
+                        return;
+                    }
+                    _status.Text = MsiRemovalText.Summary(report);
+                    SoftwareCounted?.Invoke(_entries.Count - (report.Results.Count - report.FailedCount));
                 });
         }
-
-        // Results are delivered through the window: a page that has never been shown has no handle to deliver them to.
-        private Control Owner => FindForm() ?? (Control)this;
-
-        private IReadOnlyList<Entry> SelectedEntries => _entries.Where(entry => entry.Row.Selected).ToList();
 
         private void ShowStage(Stage stage)
         {
@@ -318,17 +350,17 @@ namespace Ayr.Ui.Pages
             _scan.Inactive = busy;
             _remove.Inactive = !choosing || SelectedEntries.Count == 0;
             _remove.Text = stage == Stage.Confirming ? ConfirmLabel : RemoveLabel;
+            _selectAll.Enabled = choosing && HasItems;
+            _selectAll.Checked = AllSelected;
+            foreach (Entry entry in _entries)
+            {
+                entry.Row.Enabled = choosing;
+            }
             bool showBackup = stage == Stage.Finished && _backupFolder != null;
             if (_openBackup.Visible != showBackup)
             {
                 _openBackup.Visible = showBackup;
                 ContentChanged();
-            }
-            _selectAll.Enabled = choosing && _entries.Count > 0;
-            _selectAll.Checked = _entries.Count > 0 && _entries.All(entry => entry.Row.Selected);
-            foreach (Entry entry in _entries)
-            {
-                entry.Row.Enabled = choosing;
             }
             switch (stage)
             {
@@ -336,128 +368,11 @@ namespace Ayr.Ui.Pages
                     _status.Text = "Looking for MSI software…";
                     break;
                 case Stage.Choosing:
-                    _status.Text = _entries.Count == 0 ? "No MSI software found on this PC." : _entries.Count + " items found. Switched-on items will be removed.";
+                    _status.Text = _entries.Count + " items found. Switched-on items will be removed.";
                     break;
                 case Stage.Confirming:
                     _status.Text = "Removes " + SelectedEntries.Count + " items. Registry keys are backed up first.";
                     break;
-            }
-        }
-
-        private static string Summary(RemovalReport report)
-        {
-            int removed = report.Results.Count - report.FailedCount;
-            string summary = "Removed " + removed + " of " + report.Results.Count + ".";
-            if (report.FailedCount > 0)
-            {
-                summary += " " + report.FailedCount + " couldn't be removed.";
-            }
-            if (report.RestorePoint == RestorePointStatus.Failed)
-            {
-                summary += " No restore point: System Restore is off.";
-            }
-            return report.RestartNeeded ? summary + " Restart Windows to finish." : summary;
-        }
-
-        /// <summary>Shows on each row where the removal has got to, and the overall count below the list.</summary>
-        private sealed class RowProgress : IRemovalProgress
-        {
-            private readonly IReadOnlyList<Entry> _entries;
-            private readonly MutedText _status;
-            private int _started;
-
-            public RowProgress(IReadOnlyList<Entry> entries, MutedText status)
-            {
-                _entries = entries;
-                _status = status;
-            }
-
-            public void Starting(MsiComponent component)
-            {
-                _started++;
-                _status.Text = "Removing " + _started + " of " + _entries.Count + ": " + component.Name;
-                Show(component, "Removing…");
-            }
-
-            public void Finished(RemovalResult result) => Show(result.Component, OutcomeText(result));
-
-            private void Show(MsiComponent component, string detail)
-            {
-                Entry entry = _entries.First(candidate => candidate.Component == component);
-                entry.Row.SetText(component.Name, detail);
-            }
-        }
-
-        private static string OutcomeText(RemovalResult result)
-        {
-            switch (result.Outcome)
-            {
-                case RemovalOutcome.Removed:
-                    return "Removed";
-                case RemovalOutcome.RemovedAtRestart:
-                    return "Removed. Finishes when Windows restarts";
-                case RemovalOutcome.Failed:
-                    return "Couldn't remove: " + result.Error;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(result), result.Outcome, "Unknown removal outcome.");
-            }
-        }
-
-        private static Group GroupOf(MsiComponentKind kind)
-        {
-            switch (kind)
-            {
-                case MsiComponentKind.DriverPackage:
-                case MsiComponentKind.StoreApp:
-                case MsiComponentKind.Program:
-                    return Group.Apps;
-                case MsiComponentKind.Service:
-                case MsiComponentKind.Driver:
-                    return Group.ServicesAndDrivers;
-                default:
-                    return Group.Leftovers;
-            }
-        }
-
-        private static string HeadingOf(Group group)
-        {
-            switch (group)
-            {
-                case Group.Apps:
-                    return "APPS";
-                case Group.ServicesAndDrivers:
-                    return "SERVICES AND DRIVERS";
-                case Group.Leftovers:
-                    return "LEFTOVERS";
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(group), group, "Unknown group.");
-            }
-        }
-
-        private static string KindLabel(MsiComponentKind kind)
-        {
-            switch (kind)
-            {
-                case MsiComponentKind.DriverPackage:
-                    return "Installs MSI apps through Windows Update";
-                case MsiComponentKind.StoreApp:
-                    return "Store app";
-                case MsiComponentKind.Program:
-                    return "Program";
-                case MsiComponentKind.Service:
-                    return "Service";
-                case MsiComponentKind.Driver:
-                    return "Driver";
-                case MsiComponentKind.ScheduledTask:
-                    return "Scheduled task";
-                case MsiComponentKind.StartupEntry:
-                    return "Starts with Windows";
-                case MsiComponentKind.Settings:
-                    return "Registry";
-                case MsiComponentKind.Folder:
-                    return "Folder";
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown MSI component kind.");
             }
         }
     }

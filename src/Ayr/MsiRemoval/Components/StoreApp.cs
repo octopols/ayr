@@ -16,13 +16,13 @@ namespace Ayr.MsiRemoval.Components
             _packageFullName = packageFullName;
         }
 
-        public override RemovalOutcome Remove(RegistryBackup backup)
+        public override RemovalCompletion Remove(RegistryBackup backup)
         {
             new PowerShellScript(
                 "Remove-AppxPackage -Package " + PowerShellScript.Literal(_packageFullName) + " -AllUsers; " +
                 "Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq " + PowerShellScript.Literal(_packageName) +
                 " | Remove-AppxProvisionedPackage -Online -AllUsers | Out-Null").Run();
-            return RemovalOutcome.Removed;
+            return RemovalCompletion.Now;
         }
 
         // Package names look like "9426MICRO-STARINTERNATION.DragonCenter"; the part after the dot is the app's name.
