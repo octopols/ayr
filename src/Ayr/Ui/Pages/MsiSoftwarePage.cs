@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Ayr.App;
@@ -49,20 +50,20 @@ namespace Ayr.Ui.Pages
         private sealed class RowProgress : IRemovalProgress
         {
             private readonly IReadOnlyList<Entry> _entries;
-            private readonly MutedText _status;
+            private readonly Action<string> _showStatus;
             private int _started;
 
-            public RowProgress(IReadOnlyList<Entry> entries, MutedText status)
+            public RowProgress(IReadOnlyList<Entry> entries, Action<string> showStatus)
             {
                 _entries = entries;
-                _status = status;
+                _showStatus = showStatus;
             }
 
             public void Starting(MsiComponent component)
             {
                 _started++;
-                _status.Text = "Removing " + _started + " of " + _entries.Count + ": " + component.Name;
-                Show(component, "Removing…");
+                _showStatus(MsiRemovalText.Progress(_started, _entries.Count, component));
+                Show(component, MsiRemovalText.Removing);
             }
 
             public void Finished(RemovalResult result) => Show(result.Component, MsiRemovalText.Outcome(result));
@@ -91,6 +92,7 @@ namespace Ayr.Ui.Pages
 
         private Stage _stage = Stage.NotScanned;
         private bool _scanFailed;
+        private bool _scanIncomplete;
         private string _backupFolder;
 
         public MsiSoftwarePage(Theme theme, IPageHost host) : base(theme, host)
@@ -112,7 +114,7 @@ namespace Ayr.Ui.Pages
             _restorePointRow = AddTo(_card, Row("Make a restore point first", "Takes longer, and only works if System Restore is turned on"));
             _restorePoint = AddTo(_card, SwitchFor(_restorePointRow));
             _restorePoint.Toggled += on => _restorePoint.Checked = on;
-            _status = AddTo(_card, new MutedText(theme, "", theme.Surface));
+            _status = AddTo(_card, new MutedText(theme, "", theme.Surface) { Wraps = true });
             _openBackup = AddTo(_card, new FlatButton(theme, "Open backup", ButtonStyle.Secondary) { Visible = false });
             _openBackup.Click += (sender, e) => Process.Start("explorer.exe", "\"" + _backupFolder + "\"")?.Dispose();
             _scan = AddTo(_card, new FlatButton(theme, "Scan again", ButtonStyle.Secondary));
@@ -153,7 +155,7 @@ namespace Ayr.Ui.Pages
             {
                 choiceControl.Visible = HasItems;
             }
-            _nothingFound.Visible = !HasItems && _stage != Stage.Scanning && !_scanFailed;
+            _nothingFound.Visible = !HasItems && _stage != Stage.Scanning && !_scanFailed && !_scanIncomplete;
             _status.Visible = HasItems || !_nothingFound.Visible;
             if (HasItems)
             {
@@ -166,12 +168,19 @@ namespace Ayr.Ui.Pages
             }
         }
 
+        public override void InputsReleased() => EnableForStage();
+
+        // Leaving the page disarms the confirmation, so coming back never finds removal one click away.
         protected override void OnVisibleChanged(EventArgs e)
         {
             base.OnVisibleChanged(e);
             if (Visible)
             {
                 ScanOnce();
+            }
+            else if (_stage == Stage.Confirming)
+            {
+                ShowStage(Stage.Choosing);
             }
         }
 
@@ -209,18 +218,22 @@ namespace Ayr.Ui.Pages
             LayoutList(inner, listHeight);
         }
 
-        /// <summary>Lays out the status line and buttons along the bottom of the card and returns their top.</summary>
+        /// <summary>
+        /// Lays out the buttons along the bottom of the card with the status above them at full width, so a long summary
+        /// (such as the restart reminder) is never cut off. Returns the status's top.
+        /// </summary>
         private int LayoutFooter(int padding, int inner)
         {
             int buttonHeight = Scale(34);
-            int top = _card.Height - padding - buttonHeight;
+            int buttonsTop = _card.Height - padding - buttonHeight;
             int gap = Scale(8);
-            _remove.SetBounds(padding + inner - Scale(150), top, Scale(150), buttonHeight);
-            _scan.SetBounds(_remove.Left - gap - Scale(110), top, Scale(110), buttonHeight);
-            _openBackup.SetBounds(_scan.Left - gap - Scale(120), top, Scale(120), buttonHeight);
-            int statusRight = _openBackup.Visible ? _openBackup.Left : _scan.Left;
-            _status.SetBounds(padding, top, statusRight - Scale(12) - padding, buttonHeight);
-            return top;
+            _remove.SetBounds(padding + inner - Scale(150), buttonsTop, Scale(150), buttonHeight);
+            _scan.SetBounds(_remove.Left - gap - Scale(110), buttonsTop, Scale(110), buttonHeight);
+            _openBackup.SetBounds(_scan.Left - gap - Scale(120), buttonsTop, Scale(120), buttonHeight);
+            int statusHeight = Math.Max(_status.WrappedHeight(inner), Theme.Small.Height);
+            int statusTop = buttonsTop - Scale(10) - statusHeight;
+            _status.SetBounds(padding, statusTop, inner, statusHeight);
+            return statusTop;
         }
 
         // The rows take the full width until they overflow, then make room for the scrollbar.
@@ -247,22 +260,37 @@ namespace Ayr.Ui.Pages
             _list.SetBounds(0, _list.Top, rowWidth, y);
         }
 
+        // A removal started earlier keeps running after its window closes, and a new scan waits for it.
         private void Scan()
         {
             ShowStage(Stage.Scanning);
+            if (Host.Backend.RemovingMsiSoftware)
+            {
+                ShowStatus(MsiRemovalText.ScanningAfterRemoval);
+            }
             ContentChanged();
-            Host.Backend.ScanMsiSoftware(Window, (components, error) =>
+            Host.Backend.ScanMsiSoftware(Window, (scan, error) =>
             {
                 _scanFailed = error != null;
-                ShowComponents(_scanFailed ? Array.Empty<MsiComponent>() : components);
-                ShowStage(Stage.Choosing);
+                _scanIncomplete = scan != null && scan.Incomplete;
                 if (_scanFailed)
                 {
-                    _status.Text = "Couldn't look for MSI software: " + ExceptionText.Of(error);
+                    ActivityLog.Write("MSI scan failed: " + ExceptionText.Of(error));
                 }
+                ShowComponents(_scanFailed ? Array.Empty<MsiComponent>() : scan.Components);
+                ShowStage(Stage.Choosing);
                 ContentChanged();
                 SoftwareCounted?.Invoke(_entries.Count);
             });
+        }
+
+        private void ShowStatus(string text)
+        {
+            if (_status.Text != text)
+            {
+                _status.Text = text;
+                ContentChanged();
+            }
         }
 
         private void ShowComponents(IReadOnlyList<MsiComponent> components)
@@ -299,6 +327,7 @@ namespace Ayr.Ui.Pages
             }
             _selectAll.Checked = AllSelected;
             _remove.Inactive = SelectedEntries.Count == 0;
+            ShowStatus(ChoosingStatus());
         }
 
         private void OnRemoveClicked()
@@ -317,42 +346,46 @@ namespace Ayr.Ui.Pages
         {
             ShowStage(Stage.Removing);
             bool makeRestorePoint = _restorePoint.Checked;
-            _status.Text = makeRestorePoint ? "Making a restore point…" : "Getting ready: closing MSI's apps…";
+            ShowStatus(makeRestorePoint ? "Making a restore point…" : "Getting ready: closing MSI's apps…");
             foreach (Entry entry in selected)
             {
-                entry.Row.SetText(entry.Component.Name, "In line to be removed");
+                entry.Row.SetText(entry.Component.Name, MsiRemovalText.Queued);
             }
             Host.Backend.RemoveMsiSoftware(Window, selected.Select(entry => entry.Component).ToList(), makeRestorePoint,
-                new RowProgress(selected, _status),
+                new RowProgress(selected, ShowStatus),
                 (report, error) =>
                 {
-                    _backupFolder = report?.BackupFolder;
-                    ShowStage(Stage.Finished);
                     if (error != null)
                     {
-                        _status.Text = "Nothing was removed. " + ExceptionText.Of(error);
-                        SoftwareCounted?.Invoke(_entries.Count);
+                        OnRemovalNotStarted(selected);
                         return;
                     }
-                    _status.Text = MsiRemovalText.Summary(report);
+                    _backupFolder = HasFiles(report.BackupFolder) ? report.BackupFolder : null;
+                    ShowStage(Stage.Finished);
+                    ShowStatus(MsiRemovalText.Summary(report));
                     SoftwareCounted?.Invoke(_entries.Count - (report.Results.Count - report.FailedCount));
                 });
         }
 
+        private void OnRemovalNotStarted(IReadOnlyList<Entry> selected)
+        {
+            foreach (Entry entry in selected)
+            {
+                entry.Row.SetText(entry.Component.Name, MsiRemovalText.Detail(entry.Component));
+            }
+            ShowStage(Stage.Choosing);
+            ShowStatus(MsiRemovalText.PrepareFailed);
+        }
+
+        private static bool HasFiles(string folder) =>
+            folder != null && Directory.Exists(folder) && Directory.EnumerateFileSystemEntries(folder).Any();
+
         private void ShowStage(Stage stage)
         {
             _stage = stage;
-            bool busy = stage == Stage.Scanning || stage == Stage.Removing;
-            bool choosing = stage == Stage.Choosing || stage == Stage.Confirming;
-            _scan.Inactive = busy;
-            _remove.Inactive = !choosing || SelectedEntries.Count == 0;
             _remove.Text = stage == Stage.Confirming ? ConfirmLabel : RemoveLabel;
-            _selectAll.Enabled = choosing && HasItems;
             _selectAll.Checked = AllSelected;
-            foreach (Entry entry in _entries)
-            {
-                entry.Row.Enabled = choosing;
-            }
+            EnableForStage();
             bool showBackup = stage == Stage.Finished && _backupFolder != null;
             if (_openBackup.Visible != showBackup)
             {
@@ -362,15 +395,42 @@ namespace Ayr.Ui.Pages
             switch (stage)
             {
                 case Stage.Scanning:
-                    _status.Text = "Looking for MSI software…";
+                    ShowStatus(MsiRemovalText.Scanning);
                     break;
                 case Stage.Choosing:
-                    _status.Text = _entries.Count + " items found. Switched-on items will be removed.";
+                    ShowStatus(ChoosingStatus());
                     break;
                 case Stage.Confirming:
-                    _status.Text = "Removes " + SelectedEntries.Count + " items. Registry keys are backed up first.";
+                    ShowStatus(MsiRemovalText.Confirmation(SelectedEntries.Select(entry => entry.Component).ToList()));
                     break;
             }
+        }
+
+        private void EnableForStage()
+        {
+            bool busy = _stage == Stage.Scanning || _stage == Stage.Removing;
+            bool choosing = _stage == Stage.Choosing || _stage == Stage.Confirming;
+            _scan.Inactive = busy;
+            _remove.Inactive = !choosing || SelectedEntries.Count == 0;
+            _selectAll.Enabled = choosing && HasItems;
+            _restorePoint.Enabled = choosing;
+            foreach (Entry entry in _entries)
+            {
+                entry.Row.Enabled = choosing;
+            }
+        }
+
+        private string ChoosingStatus()
+        {
+            if (_scanFailed)
+            {
+                return MsiRemovalText.ScanFailed;
+            }
+            if (!HasItems)
+            {
+                return _scanIncomplete ? MsiRemovalText.Found(0, incomplete: true) : "";
+            }
+            return SelectedEntries.Count == 0 ? MsiRemovalText.NothingSelected : MsiRemovalText.Found(_entries.Count, _scanIncomplete);
         }
     }
 }

@@ -50,11 +50,11 @@ namespace Ayr.Battery
             {
                 return state.IsRunning ? End(state, "Battery calibration cancelled.", completed: false) : null;
             }
-            BatteryReading battery = BatteryReading.Now();
             if (!state.IsRunning)
             {
-                return Begin(state, battery);
+                return TryBegin(state);
             }
+            BatteryReading battery = BatteryReading.Now();
             CalibrationStep before = state.Step;
             string ended = Continue(state, battery);
             if (ended == null && state.Step != before)
@@ -86,22 +86,39 @@ namespace Ayr.Battery
             bool wasOnBattery = state.Step == CalibrationStep.EasingOffFull || state.Step == CalibrationStep.Emptying;
             bool windowsStartedSince = SystemClock.BootTime > state.StepSince;
             string reason = wasOnBattery && windowsStartedSince
-                ? "Battery calibration failed: the laptop shut down while running on its battery, so the battery can't carry it. It needs replacing."
-                : "Battery calibration stopped: Ayr or Windows restarted during it.";
+                ? "Battery calibration stopped: Windows restarted while the laptop ran on its battery. If you didn't restart it, the "
+                    + "battery ran out early. Try again, and if it happens again the battery needs replacing."
+                : "Battery calibration stopped because Windows or Ayr restarted. Start it again when the laptop can stay plugged in for a few hours.";
             return End(state, reason, completed: false);
         }
 
-        private string Begin(CalibrationState state, BatteryReading battery)
+        private string TryBegin(CalibrationState state)
+        {
+            BatteryReading battery;
+            BatteryHealth health;
+            try
+            {
+                battery = BatteryReading.Now();
+                health = BatteryHealth.Read(_hardware.Wmi);
+            }
+            catch (Exception ex) when (BatteryHealth.IsReadFailure(ex))
+            {
+                ActivityLog.Write("calibration: reading the battery failed: " + ex.Message);
+                return Refuse(state, "Battery calibration not started: Ayr couldn't read the battery. Try again after restarting the laptop.");
+            }
+            return Begin(state, battery, health);
+        }
+
+        private string Begin(CalibrationState state, BatteryReading battery, BatteryHealth health)
         {
             if (!battery.OnCharger)
             {
-                return Refuse(state, "Plug in the charger, then start the battery calibration again.");
+                return Refuse(state, "Battery calibration not started: the charger isn't plugged in.");
             }
-            BatteryHealth health = BatteryHealth.Read(_hardware.Wmi);
             if (!health.CanCalibrate)
             {
-                return Refuse(state, "Battery calibration not started: the battery holds " + health.Percent + "% of its original charge, "
-                    + "too little to run the laptop down to 5%. It needs replacing.");
+                return Refuse(state, "Battery calibration not started: the battery holds only " + health.Percent + "% of its original charge "
+                    + "and could shut the laptop down partway. It needs replacing.");
             }
             SaveWhatWillChange(state);
             bool easeOffFirst = battery.Percent >= NearFull && battery.Percent < Full && !battery.Charging;
@@ -194,14 +211,14 @@ namespace Ayr.Battery
                 return EndIfUnpluggedTooLong(state);
             }
             _unpluggedSince = null;
-            return battery.Percent >= RechargeTarget ? End(state, "Battery calibrated. Windows now shows the right percentage.", completed: true) : null;
+            return battery.Percent >= RechargeTarget ? End(state, "Battery calibrated.", completed: true) : null;
         }
 
         private string EndIfUnpluggedTooLong(CalibrationState state)
         {
             _unpluggedSince = _unpluggedSince ?? DateTime.Now;
             return DateTime.Now - _unpluggedSince.Value > UnpluggedGrace
-                ? End(state, "Battery calibration stopped: the charger was unplugged.", completed: false)
+                ? End(state, "Battery calibration stopped: the charger was unplugged. Plug it in and start again.", completed: false)
                 : null;
         }
 

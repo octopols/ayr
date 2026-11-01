@@ -21,7 +21,7 @@ namespace Ayr.Ui.Controls
         {
             _pages = pages;
             _rowHeight = rowHeight;
-            TabStop = true;
+            TakesFocus();
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.PageTabList;
             AccessibleName = "Pages";

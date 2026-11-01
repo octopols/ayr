@@ -39,8 +39,8 @@ namespace Ayr.Ui
         };
 
         public static string CalibrationUnavailable(BatteryHealth health) =>
-            "Not available: the battery holds " + health.Percent + "% of its original charge, too little to run the laptop down to 5%. "
-            + "Replace it first.";
+            "Not available: the battery holds only " + health.Percent + "% of its original charge and could shut the laptop down "
+            + "partway. Replace it first.";
 
         // The battery estimates its capacity while it runs the laptop, so an unused battery's figure is out of date.
         private static string Capacity(BatteryHealth health, BatteryHistory history)
@@ -54,6 +54,10 @@ namespace Ayr.Ui
             if (!historyLookup.Finished)
             {
                 return "Checking Windows' records…";
+            }
+            if (historyLookup.HasFailed)
+            {
+                return "Couldn't read Windows' records";
             }
             BatteryHistory history = historyLookup.History;
             if (history == null)

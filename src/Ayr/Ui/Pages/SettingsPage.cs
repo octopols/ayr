@@ -31,7 +31,7 @@ namespace Ayr.Ui.Pages
             _autostartRow = AddTo(_card, Row("Start with Windows", "Restores your settings when you sign in"));
             _autostartToggle = AddTo(_card, SwitchFor(_autostartRow));
             _autostartToggle.Toggled += on => host.Apply(() => host.Backend.SetAutostart(on));
-            _autoUpdateRow = AddTo(_card, Row("Automatic updates", "Installs new versions from GitHub once a day"));
+            _autoUpdateRow = AddTo(_card, Row("Automatic updates", "Installs new versions once a day, when Ayr isn't busy"));
             _autoUpdateToggle = AddTo(_card, SwitchFor(_autoUpdateRow));
             _autoUpdateToggle.Toggled += on => host.Apply(() => host.Backend.SetAutoUpdate(on));
             _divider = AddTo(_card, new Panel { BackColor = theme.Border });
@@ -95,7 +95,11 @@ namespace Ayr.Ui.Pages
             SetUpdateInFlight(true, "Checking for updates…");
             Host.Backend.RunUpdate(this, Host.Backend.FindUpdate, (release, error) =>
             {
-                SetUpdateInFlight(false, error != null ? "Couldn't check: " + error.Message
+                if (error != null)
+                {
+                    ActivityLog.Write("update check failed: " + ExceptionText.Of(error));
+                }
+                SetUpdateInFlight(false, error != null ? "Couldn't check for updates. Check your internet connection and try again."
                     : release == null ? "You have the latest version"
                     : "Version " + release.Version + " is available");
                 _availableUpdate = release;
@@ -106,9 +110,22 @@ namespace Ayr.Ui.Pages
         // On success the tray restarts into the new version, which closes this window.
         private void InstallUpdate(ReleaseInfo release)
         {
+            string interrupted = Host.Backend.WorkAnExitWouldStop();
+            if (interrupted != null)
+            {
+                _versionRow.SetSubtitle(interrupted + " Update when it's done.");
+                return;
+            }
             SetUpdateInFlight(true, "Installing " + release.Version + "…");
             Host.Backend.RunUpdate(this, () => Host.Backend.InstallUpdate(release), (message, error) =>
-                SetUpdateInFlight(false, error == null ? message + ", restarting…" : "Update failed: " + error.Message));
+            {
+                if (error != null)
+                {
+                    ActivityLog.Write("update install failed: " + ExceptionText.Of(error));
+                }
+                SetUpdateInFlight(false, error == null ? message + ", restarting…"
+                    : "Couldn't install " + release.Version + ". Ayr is unchanged; try again later.");
+            });
         }
 
         private void SetUpdateInFlight(bool inFlight, string status)

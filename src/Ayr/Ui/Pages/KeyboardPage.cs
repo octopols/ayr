@@ -30,16 +30,17 @@ namespace Ayr.Ui.Pages
             _title = Add(SectionTitle("Keyboard", null));
             _lightCard = Add(new Card(theme));
             _lightRow = AddTo(_lightCard, Row("Backlight", "The keyboard's own light keys change it too"));
-            _light = AddTo(_lightCard, Choices(KeyboardLightController.LevelNames));
+            _light = AddTo(_lightCard, Choices("Backlight", KeyboardLightController.LevelNames));
             _light.Picked += level => host.Apply(() => host.Backend.ApplyKeyboardLight(level));
-            _lightUnavailable = Add(new MutedText(theme, "Backlight control isn't available for this laptop yet.", theme.Background) { Visible = false });
+            _lightUnavailable = Add(new MutedText(theme, "Ayr can't control this laptop's keyboard light.", theme.Background) { Visible = false });
 
-            _keysTitle = Add(SectionTitle("Fn keys", "Performance and Fan mode move to the next mode on each press."));
+            _keysTitle = Add(SectionTitle("Fn keys", "Performance and Fans switch to the next setting on each press."));
             _keysCard = Add(new Card(theme));
             foreach (FnKey key in Enum.GetValues(typeof(FnKey)))
             {
-                _keyRows[key] = AddTo(_keysCard, Row("Fn + " + key, null));
-                Segmented choice = AddTo(_keysCard, new Segmented(theme, FnKeyBindings.Choices.Select(FnKeyText.Label).ToList()));
+                string keyName = "Fn+" + key;
+                _keyRows[key] = AddTo(_keysCard, Row(keyName, null));
+                Segmented choice = AddTo(_keysCard, new Segmented(theme, FnKeyBindings.Choices.Select(FnKeyText.Label).ToList()) { AccessibleName = keyName });
                 choice.Picked += index => host.Apply(() => host.Backend.SetFnKeyAction(key, FnKeyBindings.Choices[index]));
                 _keyChoices[key] = choice;
             }
@@ -119,7 +120,9 @@ namespace Ayr.Ui.Pages
             {
                 return null;
             }
-            return action == FnKeyAction.Nothing ? "Left to MSI's app, which is still installed" : "MSI's app will react to it too";
+            return action == FnKeyAction.Nothing
+                ? "Used by MSI's app. See MSI software"
+                : "MSI's app reacts too. See MSI software";
         }
     }
 }

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Management;
 using System.Threading;
 using System.Windows.Forms;
 using Ayr.Agent;
@@ -34,12 +33,15 @@ namespace Ayr.Ui
         private readonly object _oneMsiTaskAtATime = new object();
         private readonly object _oneBatteryReportAtATime = new object();
         private readonly Lazy<bool> _calibrationAvailable;
+        private readonly Lazy<bool> _gpuOverclockAvailable;
+        private int _removalsRunning;
 
         public UiBackend(HardwareContext hardware)
         {
             _hardware = hardware;
             _modes = new ModeService(hardware);
             _calibrationAvailable = new Lazy<bool>(() => hardware.Charger.IsAvailable);
+            _gpuOverclockAvailable = new Lazy<bool>(() => hardware.Performance.TryReadGpu().HasValue);
         }
 
         public event Action<ModeChange> ModeChanged;
@@ -54,13 +56,26 @@ namespace Ayr.Ui
         public void RunUpdate<T>(Control owner, Func<T> work, Action<T, Exception> done) => RunOnPool(owner, work, done, _oneUpdateAtATime);
 
         /// <summary>Uninstallers can take minutes, so MSI scans and removals have their own queue and never hold up hardware reads.</summary>
-        public void ScanMsiSoftware(Control owner, Action<IReadOnlyList<MsiComponent>, Exception> done) =>
+        public void ScanMsiSoftware(Control owner, Action<MsiScanResult, Exception> done) =>
             RunOnPool(owner, () => new MsiSoftwareScan().Run(), done, _oneMsiTaskAtATime);
 
         /// <param name="progress">Called on the owner's thread.</param>
         public void RemoveMsiSoftware(Control owner, IReadOnlyList<MsiComponent> components, bool makeRestorePoint, IRemovalProgress progress,
             Action<RemovalReport, Exception> done) =>
-            RunOnPool(owner, () => new MsiRemover().Remove(components, makeRestorePoint, new ProgressOnThread(owner, progress)), done, _oneMsiTaskAtATime);
+            RunOnPool(owner, () => RemoveCounted(components, makeRestorePoint, new ProgressOnThread(owner, progress)), done, _oneMsiTaskAtATime);
+
+        /// <summary>The removal runs in this process whether or not its window stays open.</summary>
+        public bool RemovingMsiSoftware => Volatile.Read(ref _removalsRunning) > 0;
+
+        /// <summary>A sentence saying what restarting or closing Ayr now would cut short; null when nothing would.</summary>
+        public string WorkAnExitWouldStop()
+        {
+            if (RemovingMsiSoftware)
+            {
+                return "MSI software is still being removed.";
+            }
+            return BatteryCalibration.InProgress ? "A battery calibration is running." : null;
+        }
 
         /// <summary>
         /// Has Windows format its battery report from the usage data it records anyway. Only the Battery page asks for it,
@@ -78,7 +93,7 @@ namespace Ayr.Ui
         public SlowState ReadSlow(bool includeAutostart)
         {
             DesiredState desired = DesiredState.Load();
-            int? batteryPercent = BatteryPercent();
+            BatteryReading battery = ReadBattery();
             return new SlowState(
                 desired,
                 new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
@@ -90,8 +105,9 @@ namespace Ayr.Ui
                 MsiSoftware.IsMsiCenterRunning,
                 new FnKeyBindings(desired, MsiSoftware.UsesFnF7),
                 ReadBatteryHealth(),
-                batteryPercent,
-                _calibrationAvailable.Value ? new CalibrationView(desired.CalibrationWanted, CalibrationState.Load(), batteryPercent) : null);
+                battery,
+                _calibrationAvailable.Value ? new CalibrationView(desired.CalibrationWanted, CalibrationState.Load(), battery) : null,
+                _gpuOverclockAvailable.Value);
         }
 
         public AppleSummary ReadAppleSummary() => new AppleSummary(DesiredState.Load().AppleAutoFastCharge, _charger.ConnectedStatuses());
@@ -167,18 +183,22 @@ namespace Ayr.Ui
 
         public string SetGameMode(bool on)
         {
-            _games.SetEnabled(on);
-            if (on)
+            int added = _games.SetEnabled(on);
+            if (!on)
             {
-                Supervisor.EnsureBackgroundInstance();
+                return "Game mode off";
             }
-            return on ? "Game mode on" : "Game mode off";
+            Supervisor.EnsureBackgroundInstance();
+            return added == 0 ? "Game mode on"
+                : added == 1 ? "Game mode on. Added the game found on this PC"
+                : "Game mode on. Added the " + added + " games found on this PC";
         }
 
+        // The background process starts first: a request it never picks up would hold the charge limit for nothing.
         public string StartCalibration()
         {
-            DesiredState.Update(state => state.CalibrationWanted = true);
             Supervisor.EnsureBackgroundInstance();
+            DesiredState.Update(state => state.CalibrationWanted = true);
             return "Battery calibration started. Keep the charger plugged in";
         }
 
@@ -205,7 +225,7 @@ namespace Ayr.Ui
         public string ScanForGames()
         {
             int found = _games.ScanAgain();
-            return found == 1 ? "1 game found on this PC" : found + " games found on this PC";
+            return found == 0 ? "No new games found" : found == 1 ? "Found 1 new game" : "Found " + found + " new games";
         }
 
         public string RemoveGame(GameEntry game)
@@ -260,6 +280,11 @@ namespace Ayr.Ui
 
         public string InstallUpdate(ReleaseInfo release)
         {
+            string interrupted = WorkAnExitWouldStop();
+            if (interrupted != null)
+            {
+                throw new InvalidOperationException(interrupted + " Updating restarts Ayr and would stop it, so update when it's done.");
+            }
             _installer.Install(release);
             UpdateInstalled?.Invoke();
             return "Updated to " + release.Version;
@@ -286,17 +311,17 @@ namespace Ayr.Ui
             {
                 return BatteryHealth.Read(_hardware.Wmi);
             }
-            catch (Exception ex) when (ex is InvalidOperationException || ex is ManagementException || ex is ArgumentOutOfRangeException)
+            catch (Exception ex) when (BatteryHealth.IsReadFailure(ex))
             {
                 return null;
             }
         }
 
-        private static int? BatteryPercent()
+        private static BatteryReading ReadBattery()
         {
             try
             {
-                return BatteryReading.Now().Percent;
+                return BatteryReading.Now();
             }
             catch (InvalidOperationException)
             {
@@ -315,6 +340,19 @@ namespace Ayr.Ui
             catch (EcUnavailableException)
             {
                 return null;
+            }
+        }
+
+        private RemovalReport RemoveCounted(IReadOnlyList<MsiComponent> components, bool makeRestorePoint, IRemovalProgress progress)
+        {
+            Interlocked.Increment(ref _removalsRunning);
+            try
+            {
+                return new MsiRemover().Remove(components, makeRestorePoint, progress);
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _removalsRunning);
             }
         }
 

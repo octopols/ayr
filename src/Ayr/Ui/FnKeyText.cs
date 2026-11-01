@@ -17,7 +17,7 @@ namespace Ayr.Ui
                 case FnKeyAction.NextPerformance:
                     return "Performance";
                 case FnKeyAction.NextFanMode:
-                    return "Fan mode";
+                    return "Fans";
                 default:
                     throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown Fn key action.");
             }

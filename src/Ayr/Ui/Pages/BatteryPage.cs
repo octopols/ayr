@@ -40,6 +40,7 @@ namespace Ayr.Ui.Pages
         private readonly MutedText _calibrationDetail;
 
         private bool _chargeLimitAvailable = true;
+        private bool _chargeHeldForCalibration;
         private bool _custom;
         private int? _shownPercent;
         private BatteryHealth _health;
@@ -67,7 +68,7 @@ namespace Ayr.Ui.Pages
                 Value = ChargeLimitController.DefaultCustom
             });
             _chargeSlider.ValueCommitted += percent => host.Apply(() => host.Backend.ApplyChargeLimit(percent));
-            _unavailable = Add(new MutedText(theme, "Charge limit isn't available for this laptop yet.", theme.Background) { Visible = false });
+            _unavailable = Add(new MutedText(theme, "Ayr can't set this laptop's charge limit.", theme.Background) { Visible = false });
 
             _calibrationCard = Add(new Card(theme) { Visible = false });
             _calibrationRow = AddTo(_calibrationCard, Row("Battery calibration", null));
@@ -131,11 +132,13 @@ namespace Ayr.Ui.Pages
             int inner = width - 2 * padding;
             int choiceWidth = Scale(220);
             int y = padding;
-            _chargeRow.SetBounds(padding, y, inner - choiceWidth - Scale(16), Scale(38));
+            _charge.Visible = !_chargeHeldForCalibration;
+            int rowWidth = _charge.Visible ? inner - choiceWidth - Scale(16) : inner;
+            _chargeRow.SetBounds(padding, y, rowWidth, Scale(38));
             _charge.SetBounds(padding + inner - choiceWidth, y + Scale(2), choiceWidth, Scale(34));
             y += Scale(38);
-            _chargeSlider.Visible = _custom;
-            if (_custom)
+            _chargeSlider.Visible = _custom && !_chargeHeldForCalibration;
+            if (_chargeSlider.Visible)
             {
                 y += Scale(16);
                 Stack(_chargeSlider, padding, inner, Scale(44), 0, ref y);
@@ -156,14 +159,16 @@ namespace Ayr.Ui.Pages
             return y + padding;
         }
 
+        // While a calibration holds the limit at Full, the choice is hidden rather than shown as something it isn't.
         private void ShowChargeLimit(SlowState slow)
         {
             bool calibrating = slow.Calibration != null && slow.Calibration.InProgress;
-            _chargeRow.SetSubtitle(calibrating ? HeldAtFullHint : ChargeLimitSubtitle(slow.ChargeLimitPercent, slow.BatteryPercent));
+            _chargeRow.SetSubtitle(calibrating ? HeldAtFullHint : ChargeLimitSubtitle(slow.ChargeLimitPercent, slow.Battery));
             bool available = slow.ChargeLimitPercent.HasValue;
-            if (available != _chargeLimitAvailable)
+            if (available != _chargeLimitAvailable || calibrating != _chargeHeldForCalibration)
             {
                 _chargeLimitAvailable = available;
+                _chargeHeldForCalibration = calibrating;
                 ContentChanged();
             }
             if (available && !calibrating)
@@ -173,13 +178,13 @@ namespace Ayr.Ui.Pages
         }
 
         // A limit only stops charging; it never drains the battery, so a battery above it looks like the limit isn't working.
-        private static string ChargeLimitSubtitle(int? limit, int? batteryPercent)
+        private static string ChargeLimitSubtitle(int? limit, BatteryReading battery)
         {
-            if (!limit.HasValue || !batteryPercent.HasValue || limit.Value == ChargeLimitController.Full || batteryPercent.Value <= limit.Value)
+            if (!limit.HasValue || battery == null || limit.Value == ChargeLimitController.Full || battery.Percent <= limit.Value)
             {
                 return ChargeLimitHint;
             }
-            return "Now at " + batteryPercent.Value + "%, above the limit. It won't charge until it's used below " + limit.Value + "%.";
+            return "At " + battery.Percent + "%, above your " + limit.Value + "% limit. It charges again below " + limit.Value + "%.";
         }
 
         // The slider shows the battery's own limit when one is set, otherwise the last custom value, ready for Custom.
@@ -215,11 +220,17 @@ namespace Ayr.Ui.Pages
             }
         }
 
-        // Only this page shows the battery's history, so the report is read when it is opened, once per window.
+        // Only this page shows the battery's history, so the report is read when it is opened, once per window. Leaving the
+        // page disarms "Start now", so coming back never finds it one click from starting.
         protected override void OnVisibleChanged(EventArgs e)
         {
             base.OnVisibleChanged(e);
-            if (!Visible || _historyRequested)
+            if (!Visible)
+            {
+                DisarmCalibration();
+                return;
+            }
+            if (_historyRequested)
             {
                 return;
             }
@@ -236,7 +247,7 @@ namespace Ayr.Ui.Pages
             else
             {
                 ActivityLog.Write("battery history unavailable: " + ExceptionText.Of(error));
-                _historyLookup = BatteryHistoryLookup.Unavailable;
+                _historyLookup = BatteryHistoryLookup.Failed;
             }
             ShowHealth(_health);
         }
@@ -251,10 +262,15 @@ namespace Ayr.Ui.Pages
                 {
                     _confirmingCalibration = false;
                 }
+                if (CannotStart(calibration))
+                {
+                    _confirmingCalibration = false;
+                }
                 _calibrationRow.SetSubtitle(CalibrationText.Summary(calibration));
                 _calibrate.Text = CalibrateButtonLabel(calibration);
-                _calibrate.Inactive = BatteryTooWornToCalibrate(calibration);
+                _calibrate.Inactive = CannotStart(calibration);
                 string detail = CalibrationDetail(calibration);
+                _calibrate.AccessibleDescription = _calibrate.Inactive ? detail : null;
                 layoutChanged |= detail != _calibrationDetail.Text;
                 _calibrationDetail.Text = detail;
             }
@@ -264,8 +280,19 @@ namespace Ayr.Ui.Pages
             }
         }
 
-        private bool BatteryTooWornToCalibrate(CalibrationView calibration) =>
-            !calibration.InProgress && _health != null && !_health.CanCalibrate;
+        private void DisarmCalibration()
+        {
+            if (_confirmingCalibration && _calibration != null)
+            {
+                _confirmingCalibration = false;
+                ShowCalibration(_calibration);
+            }
+        }
+
+        private bool CannotStart(CalibrationView calibration) =>
+            !calibration.InProgress && (BatteryTooWornToCalibrate || calibration.ChargerUnplugged);
+
+        private bool BatteryTooWornToCalibrate => _health != null && !_health.CanCalibrate;
 
         private string CalibrateButtonLabel(CalibrationView calibration)
         {
@@ -278,15 +305,19 @@ namespace Ayr.Ui.Pages
 
         private string CalibrationDetail(CalibrationView calibration)
         {
-            if (BatteryTooWornToCalibrate(calibration))
+            if (calibration.InProgress)
+            {
+                return CalibrationText.WhileRunning;
+            }
+            if (BatteryTooWornToCalibrate)
             {
                 return BatteryHealthText.CalibrationUnavailable(_health);
             }
-            if (_confirmingCalibration)
+            if (calibration.ChargerUnplugged)
             {
-                return CalibrationText.Confirmation;
+                return CalibrationText.PlugInCharger;
             }
-            return CalibrationText.LastResult(calibration) ?? CalibrationText.Explanation;
+            return _confirmingCalibration ? CalibrationText.Confirmation(_chargeLimitAvailable) : CalibrationText.LastResultAndExplanation(calibration);
         }
 
         private void OnCalibrateClicked()

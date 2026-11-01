@@ -20,7 +20,7 @@ namespace Ayr.Ui.Controls
         public Segmented(Theme theme, IReadOnlyList<string> items) : base(theme)
         {
             _items = items;
-            TabStop = true;
+            TakesFocus();
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.List;
         }

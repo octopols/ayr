@@ -45,6 +45,11 @@ namespace Ayr.Ui.Controls
             _button.Text = content.ButtonText ?? "";
             _button.Inactive = content.Button == RowButton.Blocked;
             _toolTip.SetToolTip(_button, content.BlockedReason);
+            // The tooltip only reaches mouse users; the screen reader gets the row's name and the reason with the button.
+            _button.AccessibleName = content.ButtonText == null ? null : content.ButtonText + " " + content.Name;
+            _button.AccessibleDescription = content.BlockedReason ?? content.Detail;
+            AccessibleName = content.Name;
+            AccessibilityNotifyClients(AccessibleEvents.NameChange, -1);
             Invalidate();
         }
 

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Ayr.App;
 using Ayr.Controllers;
 using Ayr.Ui.Controls;
 
@@ -20,7 +21,7 @@ namespace Ayr.Ui
         private const int EdgePadding = 20;
         private const int CardPadding = 14;
         private const string Hint = "Fans never go below a safe minimum, so some points stop early.";
-        private const string ResetLabel = "Reset to Auto";
+        private const string ResetLabel = "Reset to MSI's curve";
         private const string UndoResetLabel = "Undo reset";
 
         private readonly UiBackend _backend;
@@ -48,7 +49,7 @@ namespace Ayr.Ui
             _header = new HeaderBand(Theme, Text, "Drag a point up or down. It applies when you let go.", canMinimize: false);
             _header.CloseClicked += Close;
             _card = new Card(Theme);
-            _fanPicker = new Segmented(Theme, new[] { "CPU fan", "GPU fan" }) { SelectedIndex = 0 };
+            _fanPicker = new Segmented(Theme, new[] { "CPU fan", "GPU fan" }) { SelectedIndex = 0, AccessibleName = "Fan" };
             _fanPicker.Picked += index =>
             {
                 _fan = index == 0 ? FanKind.Cpu : FanKind.Gpu;
@@ -107,7 +108,13 @@ namespace Ayr.Ui
         private void Apply(FanCurves curves)
         {
             _backend.Run(this, () => _backend.ApplyCustomCurves(curves), (message, error) =>
-                _status.Text = error == null ? "Saved. Fans now follow your curve." : "Couldn't apply the curve: " + error.Message);
+            {
+                if (error != null)
+                {
+                    ActivityLog.Write("applying the fan curve failed: " + ExceptionText.Of(error));
+                }
+                _status.Text = error == null ? "Saved. Fans now follow your curve." : "Couldn't apply the curve. Your previous curve is still in use.";
+            });
         }
 
         private void ShowCurve()

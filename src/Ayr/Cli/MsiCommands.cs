@@ -40,7 +40,7 @@ ayrctl msi remove --yes [--restore-point]
 
         public ExitCode Execute(IReadOnlyList<string> arguments)
         {
-            IReadOnlyList<MsiComponent> components = new MsiSoftwareScan().Run();
+            IReadOnlyList<MsiComponent> components = new MsiSoftwareScan().Run().Components;
             string subcommand = arguments.FirstOrDefault();
             if (subcommand == null)
             {

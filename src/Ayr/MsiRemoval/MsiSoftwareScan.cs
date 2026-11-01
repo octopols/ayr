@@ -21,20 +21,23 @@ namespace Ayr.MsiRemoval
             new MsiFolderSource()
         };
 
-        public IReadOnlyList<MsiComponent> Run() =>
-            _sources.SelectMany(FindIn).OrderBy(component => component.Kind).ThenBy(component => component.Name).ToList();
-
-        private static IEnumerable<MsiComponent> FindIn(IMsiComponentSource source)
+        public MsiScanResult Run()
         {
-            try
+            var found = new List<MsiComponent>();
+            bool incomplete = false;
+            foreach (IMsiComponentSource source in _sources)
             {
-                return source.Find().ToList();
+                try
+                {
+                    found.AddRange(source.Find());
+                }
+                catch (Exception ex)
+                {
+                    ActivityLog.Write("MSI scan: " + source.GetType().Name + " failed: " + ex.Message);
+                    incomplete = true;
+                }
             }
-            catch (Exception ex)
-            {
-                ActivityLog.Write("MSI scan: " + source.GetType().Name + " failed: " + ex.Message);
-                return Enumerable.Empty<MsiComponent>();
-            }
+            return new MsiScanResult(found.OrderBy(component => component.Kind).ThenBy(component => component.Name).ToList(), incomplete);
         }
     }
 }

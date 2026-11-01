@@ -322,7 +322,7 @@ namespace Ayr.Agent
             catch (Exception ex)
             {
                 ActivityLog.Write("calibration failed: " + ex);
-                NotifyIfEnded(_calibration.Abandon("Battery calibration stopped: " + ExceptionText.Of(ex)));
+                NotifyIfEnded(_calibration.Abandon("Battery calibration stopped: Ayr couldn't control the charger. Your settings are back as they were."));
             }
         }
 
@@ -330,7 +330,7 @@ namespace Ayr.Agent
         {
             try
             {
-                _calibration.Abandon("Battery calibration stopped because Ayr closed.");
+                _calibration.Abandon("Battery calibration stopped because Ayr was closed. Start it again from the Battery page.");
             }
             catch (Exception ex)
             {

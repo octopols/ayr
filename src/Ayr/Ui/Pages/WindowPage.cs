@@ -37,6 +37,11 @@ namespace Ayr.Ui.Pages
         {
         }
 
+        /// <summary>Called after a change finishes and every input is enabled again, for pages that keep some disabled.</summary>
+        public virtual void InputsReleased()
+        {
+        }
+
         /// <summary>Positions the content for the page's current size.</summary>
         public abstract void LayoutContent();
 
@@ -54,8 +59,9 @@ namespace Ayr.Ui.Pages
             }
         }
 
-        protected Segmented Choices<T>(IEnumerable<T> values) =>
-            new Segmented(Theme, values.Select(value => value.ToString()).ToList());
+        /// <param name="name">What a screen reader calls the choice, usually the title above it.</param>
+        protected Segmented Choices<T>(string name, IEnumerable<T> values) =>
+            new Segmented(Theme, values.Select(value => value.ToString()).ToList()) { AccessibleName = name };
 
         protected TitleWithSubtitle SectionTitle(string title, string subtitle) =>
             new TitleWithSubtitle(Theme, title, subtitle, Theme.Section, Theme.Background);

@@ -13,7 +13,7 @@ namespace Ayr.Ui.Controls
 
         public ToggleSwitch(Theme theme) : base(theme)
         {
-            TabStop = true;
+            TakesFocus();
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.CheckButton;
         }

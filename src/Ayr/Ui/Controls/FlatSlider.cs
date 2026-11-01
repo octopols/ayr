@@ -23,7 +23,7 @@ namespace Ayr.Ui.Controls
             _minimum = minimum;
             _maximum = maximum;
             _value = minimum;
-            TabStop = true;
+            TakesFocus();
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.Slider;
         }

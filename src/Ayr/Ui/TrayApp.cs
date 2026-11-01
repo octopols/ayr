@@ -50,7 +50,7 @@ namespace Ayr.Ui
             _backend = new UiBackend(_hardware);
             _backend.ModeChanged += change => _uiThread.BeginInvoke((Action)(() => OnModeChanged(change)));
             _backend.UpdateInstalled += () => _uiThread.BeginInvoke((Action)RestartIntoNewVersion);
-            _autoUpdate = new AutoUpdateTimer(_backend, _uiThread, canRestart: () => !AnyWindowOpen);
+            _autoUpdate = new AutoUpdateTimer(_backend, _uiThread, canRestart: () => !AnyWindowOpen && _backend.WorkAnExitWouldStop() == null);
 
             _notifyIcon = new NotifyIcon { Icon = _trayIcon, Text = AppName, Visible = true };
             if (startupNotice != null)
@@ -131,7 +131,8 @@ namespace Ayr.Ui
             {
                 if (error != null)
                 {
-                    ActivityLog.Write("Fn+" + key + " failed: " + error.Message);
+                    ActivityLog.Write("Fn+" + key + " failed: " + ExceptionText.Of(error));
+                    ShowWarning("Fn+" + key + " couldn't change the setting. Open Ayr to try again.");
                 }
             });
 
@@ -242,11 +243,14 @@ namespace Ayr.Ui
             {
                 string text = error != null
                     ? AppName
-                    : AppName + "\nFans " + live.Fan + " · " + live.Performance + " performance"
+                    : AppName + "\n" + PerformanceTooltip(live.Performance) + " · Fans " + live.Fan
                         + "\nCPU " + live.Telemetry.CpuTemperature + "°C · GPU " + live.Telemetry.GpuTemperature + "°C";
                 _notifyIcon.Text = text.Length > TooltipLimit ? text.Substring(0, TooltipLimit) : text;
             });
         }
+
+        private static string PerformanceTooltip(PerformanceLevel level) =>
+            PerformanceController.SelectableLevels.Contains(level) ? "Performance " + level : "Performance set by another app";
 
         private void ShowWarning(string message) =>
             _uiThread.BeginInvoke((Action)(() => _notifyIcon.ShowBalloonTip(BalloonMs, AppName, message, ToolTipIcon.Warning)));

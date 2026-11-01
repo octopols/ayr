@@ -12,12 +12,13 @@ namespace Ayr.Ui.Controls
         private readonly ButtonStyle _style;
         private bool _hovered;
         private bool _inactive;
+        private bool _activationKeyHeld;
 
         public FlatButton(Theme theme, string text, ButtonStyle style) : base(theme)
         {
             Text = text;
             _style = style;
-            TabStop = true;
+            TakesFocus();
             Cursor = Cursors.Hand;
             AccessibleRole = AccessibleRole.PushButton;
         }
@@ -33,6 +34,7 @@ namespace Ayr.Ui.Controls
                     _inactive = value;
                     UpdateCursor();
                     Invalidate();
+                    AccessibilityNotifyClients(AccessibleEvents.StateChange, -1);
                 }
             }
         }
@@ -70,6 +72,7 @@ namespace Ayr.Ui.Controls
         protected override void OnTextChanged(EventArgs e)
         {
             Invalidate();
+            AccessibilityNotifyClients(AccessibleEvents.NameChange, -1);
             base.OnTextChanged(e);
         }
 
@@ -85,14 +88,33 @@ namespace Ayr.Ui.Controls
             base.OnMouseLeave(e);
         }
 
+        // Like a Windows button it acts when the key is released, so holding the key can't press it again, which would
+        // walk straight through a two-step confirmation.
         protected override void OnKeyDown(KeyEventArgs e)
         {
             if (IsActivationKey(e.KeyCode))
             {
-                OnClick(EventArgs.Empty);
+                _activationKeyHeld = true;
                 e.Handled = true;
             }
             base.OnKeyDown(e);
+        }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            if (IsActivationKey(e.KeyCode) && _activationKeyHeld)
+            {
+                _activationKeyHeld = false;
+                OnClick(EventArgs.Empty);
+                e.Handled = true;
+            }
+            base.OnKeyUp(e);
+        }
+
+        protected override void OnLostFocus(EventArgs e)
+        {
+            _activationKeyHeld = false;
+            base.OnLostFocus(e);
         }
 
         protected override void OnEnabledChanged(EventArgs e)
