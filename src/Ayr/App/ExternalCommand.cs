@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
-namespace Ayr.MsiRemoval
+namespace Ayr.App
 {
     /// <summary>A program run to completion with its output captured, such as reg.exe, schtasks.exe or an uninstaller.</summary>
     public sealed class ExternalCommand

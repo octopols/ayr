@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Ayr.App;
 using Microsoft.Win32;
 
 namespace Ayr.MsiRemoval.Components

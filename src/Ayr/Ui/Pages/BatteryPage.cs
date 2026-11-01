@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
+using Ayr.App;
 using Ayr.Battery;
 using Ayr.Controllers;
 using Ayr.Ui.Controls;
@@ -15,6 +17,8 @@ namespace Ayr.Ui.Pages
     {
         private const int FullChargeIndex = 0;
         private const int CustomChargeIndex = 1;
+        private const int HealthFactLines = 3;
+        private const int FactLineHeight = 22;
         private const string ChargeLimitHint = "Mostly plugged in? Stopping at 80% slows wear.";
         private const string HeldAtFullHint = "Held at Full until the calibration ends";
         private const string CalibrateLabel = "Calibrate";
@@ -24,7 +28,7 @@ namespace Ayr.Ui.Pages
         private readonly TitleWithSubtitle _title;
         private readonly Card _healthCard;
         private readonly TitleWithSubtitle _healthRow;
-        private readonly MutedText _healthDetail;
+        private readonly FactList _healthFacts;
         private readonly Card _chargeCard;
         private readonly TitleWithSubtitle _chargeRow;
         private readonly Segmented _charge;
@@ -39,6 +43,8 @@ namespace Ayr.Ui.Pages
         private bool _custom;
         private int? _shownPercent;
         private BatteryHealth _health;
+        private BatteryHistoryLookup _historyLookup = BatteryHistoryLookup.Checking;
+        private bool _historyRequested;
         private CalibrationView _calibration;
         private bool _confirmingCalibration;
 
@@ -47,7 +53,7 @@ namespace Ayr.Ui.Pages
             _title = Add(SectionTitle("Battery", null));
             _healthCard = Add(new Card(theme) { Visible = false });
             _healthRow = AddTo(_healthCard, Row("Health", null));
-            _healthDetail = AddTo(_healthCard, new MutedText(theme, "", theme.Surface) { Wraps = true });
+            _healthFacts = AddTo(_healthCard, new FactList(theme));
             _chargeCard = Add(new Card(theme));
             _chargeRow = AddTo(_chargeCard, Row("Charge limit", ChargeLimitHint));
             _charge = AddTo(_chargeCard, new Segmented(theme, new[] { "Full", "Custom" }));
@@ -115,7 +121,7 @@ namespace Ayr.Ui.Pages
             int inner = width - 2 * padding;
             int y = padding;
             Stack(_healthRow, padding, inner, Scale(38), Scale(4), ref y);
-            Stack(_healthDetail, padding, inner, Scale(32), 0, ref y);
+            Stack(_healthFacts, padding, inner, Scale(HealthFactLines * FactLineHeight), 0, ref y);
             return y + padding;
         }
 
@@ -146,14 +152,14 @@ namespace Ayr.Ui.Pages
             _calibrationRow.SetBounds(padding, y, inner - buttonWidth - Scale(16), Scale(38));
             _calibrate.SetBounds(padding + inner - buttonWidth, y + Scale(2), buttonWidth, Scale(34));
             y += Scale(38) + Scale(10);
-            Stack(_calibrationDetail, padding, inner, Scale(48), 0, ref y);
+            Stack(_calibrationDetail, padding, inner, _calibrationDetail.WrappedHeight(inner), 0, ref y);
             return y + padding;
         }
 
         private void ShowChargeLimit(SlowState slow)
         {
             bool calibrating = slow.Calibration != null && slow.Calibration.InProgress;
-            _chargeRow.SetSubtitle(calibrating ? HeldAtFullHint : ChargeLimitHint);
+            _chargeRow.SetSubtitle(calibrating ? HeldAtFullHint : ChargeLimitSubtitle(slow.ChargeLimitPercent, slow.BatteryPercent));
             bool available = slow.ChargeLimitPercent.HasValue;
             if (available != _chargeLimitAvailable)
             {
@@ -164,6 +170,16 @@ namespace Ayr.Ui.Pages
             {
                 ShowChargeChoice(slow.ChargeLimitPercent.Value, slow.Desired.CustomChargePercent);
             }
+        }
+
+        // A limit only stops charging; it never drains the battery, so a battery above it looks like the limit isn't working.
+        private static string ChargeLimitSubtitle(int? limit, int? batteryPercent)
+        {
+            if (!limit.HasValue || !batteryPercent.HasValue || limit.Value == ChargeLimitController.Full || batteryPercent.Value <= limit.Value)
+            {
+                return ChargeLimitHint;
+            }
+            return "Now at " + batteryPercent.Value + "%, above the limit. It won't charge until it's used below " + limit.Value + "%.";
         }
 
         // The slider shows the battery's own limit when one is set, otherwise the last custom value, ready for Custom.
@@ -191,7 +207,7 @@ namespace Ayr.Ui.Pages
             if (health != null)
             {
                 _healthRow.SetSubtitle(BatteryHealthText.Summary(health));
-                _healthDetail.Text = BatteryHealthText.Detail(health);
+                _healthFacts.ShowFacts(BatteryHealthText.Facts(health, _historyLookup));
             }
             if (visibilityChanged)
             {
@@ -199,9 +215,35 @@ namespace Ayr.Ui.Pages
             }
         }
 
+        // Only this page shows the battery's history, so the report is read when it is opened, once per window.
+        protected override void OnVisibleChanged(EventArgs e)
+        {
+            base.OnVisibleChanged(e);
+            if (!Visible || _historyRequested)
+            {
+                return;
+            }
+            _historyRequested = true;
+            Host.Backend.ReadBatteryHistory(Window, OnHistoryRead);
+        }
+
+        private void OnHistoryRead(BatteryHistory history, Exception error)
+        {
+            if (error == null)
+            {
+                _historyLookup = BatteryHistoryLookup.Found(history);
+            }
+            else
+            {
+                ActivityLog.Write("battery history unavailable: " + ExceptionText.Of(error));
+                _historyLookup = BatteryHistoryLookup.Unavailable;
+            }
+            ShowHealth(_health);
+        }
+
         private void ShowCalibration(CalibrationView calibration)
         {
-            bool visibilityChanged = (calibration == null) != (_calibration == null);
+            bool layoutChanged = (calibration == null) != (_calibration == null);
             _calibration = calibration;
             if (calibration != null)
             {
@@ -212,9 +254,11 @@ namespace Ayr.Ui.Pages
                 _calibrationRow.SetSubtitle(CalibrationText.Summary(calibration));
                 _calibrate.Text = CalibrateButtonLabel(calibration);
                 _calibrate.Inactive = BatteryTooWornToCalibrate(calibration);
-                _calibrationDetail.Text = CalibrationDetail(calibration);
+                string detail = CalibrationDetail(calibration);
+                layoutChanged |= detail != _calibrationDetail.Text;
+                _calibrationDetail.Text = detail;
             }
-            if (visibilityChanged)
+            if (layoutChanged)
             {
                 ContentChanged();
             }

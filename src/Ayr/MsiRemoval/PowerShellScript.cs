@@ -1,4 +1,5 @@
 using System;
+using Ayr.App;
 
 namespace Ayr.MsiRemoval
 {

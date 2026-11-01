@@ -42,6 +42,9 @@ namespace Ayr.Ui.Pages
 
         protected int Scale(int pixels) => Host.Scale(pixels);
 
+        /// <summary>Background results are delivered through the window: a page that was never shown has no handle of its own.</summary>
+        protected Control Window => FindForm() ?? (Control)this;
+
         /// <summary>A hidden page is laid out when it is shown, so only the visible one needs it now.</summary>
         protected void ContentChanged()
         {

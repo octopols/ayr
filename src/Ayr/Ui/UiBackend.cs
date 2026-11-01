@@ -32,6 +32,7 @@ namespace Ayr.Ui
         private readonly object _oneCallAtATime = new object();
         private readonly object _oneUpdateAtATime = new object();
         private readonly object _oneMsiTaskAtATime = new object();
+        private readonly object _oneBatteryReportAtATime = new object();
         private readonly Lazy<bool> _calibrationAvailable;
 
         public UiBackend(HardwareContext hardware)
@@ -61,6 +62,13 @@ namespace Ayr.Ui
             Action<RemovalReport, Exception> done) =>
             RunOnPool(owner, () => new MsiRemover().Remove(components, makeRestorePoint, new ProgressOnThread(owner, progress)), done, _oneMsiTaskAtATime);
 
+        /// <summary>
+        /// Has Windows format its battery report from the usage data it records anyway. Only the Battery page asks for it,
+        /// on its own queue so it never holds up hardware reads.
+        /// </summary>
+        public void ReadBatteryHistory(Control owner, Action<BatteryHistory, Exception> done) =>
+            RunOnPool(owner, BatteryHistory.Read, done, _oneBatteryReportAtATime);
+
         public LiveState ReadLive() => new LiveState(
             _hardware.Fans.ReadMode(),
             _hardware.Performance.ReadLevel(),
@@ -70,6 +78,7 @@ namespace Ayr.Ui
         public SlowState ReadSlow(bool includeAutostart)
         {
             DesiredState desired = DesiredState.Load();
+            int? batteryPercent = BatteryPercent();
             return new SlowState(
                 desired,
                 new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
@@ -81,7 +90,8 @@ namespace Ayr.Ui
                 MsiSoftware.IsMsiCenterRunning,
                 new FnKeyBindings(desired, MsiSoftware.UsesFnF7),
                 ReadBatteryHealth(),
-                _calibrationAvailable.Value ? new CalibrationView(desired.CalibrationWanted, CalibrationState.Load(), BatteryPercent()) : null);
+                batteryPercent,
+                _calibrationAvailable.Value ? new CalibrationView(desired.CalibrationWanted, CalibrationState.Load(), batteryPercent) : null);
         }
 
         public AppleSummary ReadAppleSummary() => new AppleSummary(DesiredState.Load().AppleAutoFastCharge, _charger.ConnectedStatuses());
