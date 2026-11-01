@@ -8,13 +8,25 @@ namespace Ayr.Ui
     {
         public const string Explanation =
             "Empties and refills the battery once so its percentage is right again. It takes a few hours with the charger "
-            + "plugged in, and the laptop stays awake meanwhile. MSI suggests it every three months.";
+            + "plugged in. MSI suggests it every three months.";
 
-        public const string Confirmation =
-            "Keep the charger plugged in. The laptop charges to 100%, runs on its battery down to 5% and charges again. "
-            + "Your charge limit is held at Full until it ends.";
+        public const string PlugInCharger = "Plug in the charger to calibrate.";
+
+        public const string WhileRunning =
+            "Keep the charger plugged in and Ayr running. You can use the laptop meanwhile. While the battery runs down, "
+            + "Windows shows it on battery even though the charger is plugged in.";
+
+        private const string ConfirmationStart =
+            "Takes a few hours. Keep the charger plugged in and Ayr running: exiting Ayr stops it. You can keep using the laptop. "
+            + "Until it ends the laptop won't sleep, turn off its screen or sleep when the lid closes, so don't put it in a bag.";
+
+        private const string ChargeLimitHeld = " Your charge limit is held at Full.";
+
+        private const string UnpluggedMidway = "Charger unplugged. Plug it back in within a minute or the calibration stops";
 
         private static readonly TimeSpan SuggestedInterval = TimeSpan.FromDays(91);
+
+        public static string Confirmation(bool hasChargeLimit) => hasChargeLimit ? ConfirmationStart + ChargeLimitHeld : ConfirmationStart;
 
         public static string Summary(CalibrationView calibration)
         {
@@ -24,11 +36,16 @@ namespace Ayr.Ui
                     ? "Last done " + calibration.LastCompleted.Value.ToString("d MMM yyyy") + ". Next suggested " + (calibration.LastCompleted.Value + SuggestedInterval).ToString("d MMM") + "."
                     : "Not done yet";
             }
-            return Progress(calibration.Step) + Charge(calibration.BatteryPercent);
+            if (calibration.NeedsCharger && calibration.ChargerUnplugged)
+            {
+                return UnpluggedMidway;
+            }
+            return Progress(calibration.Step) + Charge(calibration.Battery);
         }
 
-        /// <summary>What happened last time, or null before the first run and while one is running.</summary>
-        public static string LastResult(CalibrationView calibration) => calibration.InProgress ? null : calibration.LastResult;
+        /// <summary>What happened last time followed by what calibration is, or just the latter before the first run.</summary>
+        public static string Idle(CalibrationView calibration) =>
+            calibration.LastResult == null ? Explanation : calibration.LastResult + Environment.NewLine + Explanation;
 
         private static string Progress(CalibrationStep step)
         {
@@ -49,6 +66,6 @@ namespace Ayr.Ui
             }
         }
 
-        private static string Charge(int? percent) => percent.HasValue ? " (now " + percent.Value + "%)" : "";
+        private static string Charge(BatteryReading battery) => battery == null ? "" : " (now " + battery.Percent + "%)";
     }
 }

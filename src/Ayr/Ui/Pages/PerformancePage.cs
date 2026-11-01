@@ -17,7 +17,7 @@ namespace Ayr.Ui.Pages
 
         private static readonly Dictionary<PerformanceLevel, string> LevelMeanings = new Dictionary<PerformanceLevel, string>
         {
-            [PerformanceLevel.Turbo] = "Highest power for CPU and GPU, plus your GPU overclock. Hottest and loudest.",
+            [PerformanceLevel.Turbo] = "Highest power for CPU and GPU, plus any GPU overclock. Hottest and loudest.",
             [PerformanceLevel.High] = "High power at stock GPU speeds. The usual choice when plugged in.",
             [PerformanceLevel.Medium] = "Lower power limits. Cooler and quieter for browsing and work.",
             [PerformanceLevel.Low] = "Lowest power. Coolest and quietest, and longest on battery."
@@ -27,8 +27,8 @@ namespace Ayr.Ui.Pages
         {
             [FanMode.Auto] = "MSI's own curve: fans speed up as the laptop warms up.",
             [FanMode.Max] = "Both fans at their normal top speed all the time.",
-            [FanMode.Silent] = "Slower, quieter fans. Switches back to Auto at 90°C.",
-            [FanMode.Boost] = "Cooler Boost: fans beyond their normal top speed. Loudest.",
+            [FanMode.Silent] = "Slower, quieter fans. Switches back to Auto at 90°C or when Ayr exits.",
+            [FanMode.Boost] = "Fans beyond their normal top speed. Loudest.",
             [FanMode.Custom] = "Your own curve for each fan."
         };
 
@@ -46,31 +46,40 @@ namespace Ayr.Ui.Pages
         private readonly LabeledSlider _coreOffset, _memoryOffset;
         private readonly FlatButton _applyOverclock;
 
+        private readonly MutedText _overclockUnavailable;
+
         private SlowState _slow;
+        private PerformanceLevel? _livePerformance;
         private bool _customFanSelected;
         private bool _offsetsShown;
+        private bool _openCurveOnceCustom;
+        private bool _overclockAvailable = true;
 
         public PerformancePage(Theme theme, IPageHost host) : base(theme, host)
         {
             _performanceTitle = Add(SectionTitle("Performance", null));
             _performanceCard = Add(new Card(theme));
-            _performance = AddTo(_performanceCard, Choices(PerformanceController.SelectableLevels));
+            _performance = AddTo(_performanceCard, Choices("Performance", PerformanceController.SelectableLevels));
             _performance.Picked += index => host.Apply(() => host.Backend.ApplyPerformance(PerformanceController.SelectableLevels[index]));
             _performanceMeaning = AddTo(_performanceCard, new MutedText(theme, "", theme.Surface));
 
             _fanTitle = Add(SectionTitle("Fans", null));
             _fanCard = Add(new Card(theme));
-            _fan = AddTo(_fanCard, Choices(FanController.SelectableModes));
+            _fan = AddTo(_fanCard, Choices("Fans", FanController.SelectableModes));
             _fan.Picked += OnFanPicked;
             _fanMeaning = AddTo(_fanCard, new MutedText(theme, "", theme.Surface));
-            _editCurve = AddTo(_fanCard, new FlatButton(theme, "Edit curve…", ButtonStyle.Secondary) { Visible = false });
+            _editCurve = AddTo(_fanCard, new FlatButton(theme, "Edit curve…", ButtonStyle.Secondary) { Visible = false, Inactive = true });
             _editCurve.Click += (sender, e) => OpenCurveEditor();
 
             _overclockTitle = Add(SectionTitle("GPU overclock", null));
             _overclockCard = Add(new Card(theme));
-            _coreOffset = AddTo(_overclockCard, new LabeledSlider(theme, "Core", 0, GpuOffsets.MaxCoreMhz, Megahertz));
-            _memoryOffset = AddTo(_overclockCard, new LabeledSlider(theme, "Memory", 0, GpuOffsets.MaxMemoryMhz, Megahertz));
-            _applyOverclock = AddTo(_overclockCard, new FlatButton(theme, SavedLabel, ButtonStyle.Primary) { Inactive = true });
+            _coreOffset = AddTo(_overclockCard, new LabeledSlider(theme, "Core clock", 0, GpuOffsets.MaxCoreMhz, Megahertz));
+            _memoryOffset = AddTo(_overclockCard, new LabeledSlider(theme, "Memory clock", 0, GpuOffsets.MaxMemoryMhz, Megahertz));
+            _applyOverclock = AddTo(_overclockCard, new FlatButton(theme, ApplyLabel, ButtonStyle.Primary) { Inactive = true });
+            _overclockUnavailable = AddTo(_overclockCard, new MutedText(theme, "Ayr can't overclock this laptop's graphics card.", theme.Surface)
+            {
+                Visible = false
+            });
             _applyOverclock.Click += (sender, e) =>
             {
                 GpuOffsets offsets = ChosenOffsets;
@@ -93,7 +102,8 @@ namespace Ayr.Ui.Pages
             _performanceMeaning.Text = LevelMeanings.TryGetValue(live.Performance, out string level) ? level : "Set by another app.";
             _fan.SelectedIndex = FanController.SelectableModes.IndexOf(live.Fan);
             _fanMeaning.Text = FanMeanings.TryGetValue(live.Fan, out string fan) ? fan : "";
-            _overclockTitle.SetSubtitle("Added only in Turbo. " + (live.Performance == PerformanceLevel.Turbo ? "On right now." : "Off right now."));
+            _livePerformance = live.Performance;
+            ShowOverclockSubtitle();
             bool custom = live.Fan == FanMode.Custom;
             if (custom != _customFanSelected)
             {
@@ -101,11 +111,23 @@ namespace Ayr.Ui.Pages
                 _editCurve.Visible = custom;
                 ContentChanged();
             }
+            if (custom && _openCurveOnceCustom)
+            {
+                _openCurveOnceCustom = false;
+                OpenCurveEditor();
+            }
         }
 
         public override void ShowSlow(SlowState slow)
         {
             _slow = slow;
+            _editCurve.Inactive = false;
+            if (slow.GpuOverclockAvailable != _overclockAvailable)
+            {
+                _overclockAvailable = slow.GpuOverclockAvailable;
+                ContentChanged();
+            }
+            ShowOverclockSubtitle();
             if (!_offsetsShown)
             {
                 // The sliders start at the saved offsets and are then left to the user until they press Apply.
@@ -116,11 +138,28 @@ namespace Ayr.Ui.Pages
             ShowOverclockState();
         }
 
+        private void ShowOverclockSubtitle()
+        {
+            if (!_overclockAvailable || _slow == null || !_livePerformance.HasValue)
+            {
+                _overclockTitle.SetSubtitle(null);
+                return;
+            }
+            string now = !_slow.Desired.TurboOffsets.RaisesClocks ? "Set to +0, so nothing is added."
+                : _livePerformance.Value == PerformanceLevel.Turbo ? "On right now."
+                : "Off right now.";
+            _overclockTitle.SetSubtitle("Added only in Turbo. " + now);
+        }
+
         // The button only offers to apply when the sliders differ from what is saved, so its state answers "is this saved?".
         private void ShowOverclockState()
         {
             GpuOffsets saved = _slow?.Desired.TurboOffsets;
-            bool unsaved = saved == null || saved.CoreMhz != _coreOffset.Value || saved.MemoryMhz != _memoryOffset.Value;
+            if (saved == null)
+            {
+                return;
+            }
+            bool unsaved = saved.CoreMhz != _coreOffset.Value || saved.MemoryMhz != _memoryOffset.Value;
             _applyOverclock.Inactive = !unsaved;
             _applyOverclock.Text = unsaved ? ApplyLabel : SavedLabel;
         }
@@ -165,6 +204,16 @@ namespace Ayr.Ui.Pages
         {
             int padding = Scale(CardPadding);
             int inner = width - 2 * padding;
+            foreach (Control control in new Control[] { _coreOffset, _memoryOffset, _applyOverclock })
+            {
+                control.Visible = _overclockAvailable;
+            }
+            _overclockUnavailable.Visible = !_overclockAvailable;
+            if (!_overclockAvailable)
+            {
+                _overclockUnavailable.SetBounds(padding, padding, inner, Scale(24));
+                return Scale(24) + 2 * padding;
+            }
             int applyWidth = Scale(96);
             int applyHeight = Scale(34);
             int gap = Scale(24);
@@ -176,15 +225,13 @@ namespace Ayr.Ui.Pages
             return sliderHeight + 2 * padding;
         }
 
-        // Picking Custom opens the curve straight away: choosing it is almost always the start of shaping it.
+        // Picking Custom opens the curve once the fans have switched to it: choosing it is almost always the start of shaping
+        // it, and a switch that failed leaves its error in view instead of behind the editor.
         private void OnFanPicked(int index)
         {
             FanMode mode = FanController.SelectableModes[index];
+            _openCurveOnceCustom = mode == FanMode.Custom;
             Host.Apply(() => Host.Backend.ApplyFan(mode));
-            if (mode == FanMode.Custom)
-            {
-                OpenCurveEditor();
-            }
         }
 
         private void OpenCurveEditor()

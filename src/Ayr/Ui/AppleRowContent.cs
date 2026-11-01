@@ -12,7 +12,8 @@ namespace Ayr.Ui
     {
         public const string SendLabel = "Send";
         public const string SentLabel = "Sent";
-        private const string FastChargingBadge = "Fast charging";
+        // The charger never confirms the device switched rate, so the badge claims only what Ayr knows: it asked.
+        private const string FastChargingBadge = "Requested";
 
         public static readonly RowContent NoDevice = new RowContent("No device connected", "Plug in an iPhone or iPad");
 

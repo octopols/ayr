@@ -16,11 +16,20 @@ namespace Ayr.Ui.Controls
             Theme = theme;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint
                 | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            SetStyle(ControlStyles.Selectable, false);
+            TabStop = false;
             ForeColor = theme.Text;
             Font = theme.Body;
         }
 
         protected Theme Theme { get; }
+
+        /// <summary>Text and pictures stay out of the Tab order; only controls the user operates take focus.</summary>
+        protected void TakesFocus()
+        {
+            SetStyle(ControlStyles.Selectable, true);
+            TabStop = true;
+        }
 
         protected static void Smooth(Graphics graphics)
         {

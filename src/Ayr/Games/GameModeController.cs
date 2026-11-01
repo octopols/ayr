@@ -30,18 +30,24 @@ namespace Ayr.Games
             return new GameOverview(added, running, notAdded);
         }
 
-        /// <summary>The first time it is switched on with no games added, the games found on this PC are added, so it just works.</summary>
-        public void SetEnabled(bool on)
+        /// <summary>
+        /// The first time it is switched on with no games added, the games found on this PC are added, so it just works.
+        /// Returns how many were added that way.
+        /// </summary>
+        public int SetEnabled(bool on)
         {
             DesiredState.Update(state => state.GameMode = on);
+            int added = 0;
             if (on && _library.Load().Count == 0)
             {
                 foreach (GameEntry game in FoundGames())
                 {
                     _library.Add(game);
+                    added++;
                 }
             }
             ActivityLog.Write("game mode " + (on ? "on" : "off"));
+            return added;
         }
 
         public void SetProfile(GameProfile profile)
@@ -80,11 +86,12 @@ namespace Ayr.Games
 
         public GameEntry FindAdded(string path) => _library.Find(path);
 
-        /// <summary>Looks for games again now rather than when the cached list expires; returns how many were found.</summary>
+        /// <summary>Looks for games again now rather than when the cached list expires; returns how many aren't added yet.</summary>
         public int ScanAgain()
         {
             _found = null;
-            return FoundGames().Count;
+            List<GameEntry> added = _library.Load();
+            return FoundGames().Count(candidate => !added.Any(candidate.Overlaps));
         }
 
         private List<GameEntry> FoundGames()

@@ -34,6 +34,7 @@ namespace Ayr.Battery
 
         public bool CapacityIsStale => !LastRanLaptop.HasValue || DateTime.Now - LastRanLaptop.Value > CapacityGoesStaleAfter;
 
+        /// <summary>Null when Windows has no records of the battery yet.</summary>
         public static BatteryHistory Read()
         {
             XmlDocument report = WindowsBatteryReport();
@@ -42,7 +43,7 @@ namespace Ayr.Battery
             XmlElement[] periods = report.SelectNodes("//b:History/b:HistoryEntry", names).Cast<XmlElement>().ToArray();
             if (periods.Length == 0)
             {
-                throw new InvalidOperationException("Windows has no battery history yet.");
+                return null;
             }
             XmlElement lastOnBattery = periods.LastOrDefault(period => TimeOnBattery(period) > TimeSpan.Zero);
             DateTime? lastRanLaptop = lastOnBattery == null ? (DateTime?)null : StartOf(lastOnBattery);

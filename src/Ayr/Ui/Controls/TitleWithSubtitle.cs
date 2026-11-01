@@ -15,6 +15,7 @@ namespace Ayr.Ui.Controls
             _subtitle = subtitle;
             _titleFont = titleFont;
             BackColor = background;
+            AccessibleRole = AccessibleRole.StaticText;
         }
 
         public string Title => _title;
@@ -25,8 +26,12 @@ namespace Ayr.Ui.Controls
             {
                 _subtitle = subtitle;
                 Invalidate();
+                AccessibilityNotifyClients(AccessibleEvents.ValueChange, -1);
             }
         }
+
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new OwnerDrawnAccessibility(this, name: () => _title, value: () => _subtitle ?? "");
 
         protected override void OnPaint(PaintEventArgs e)
         {

@@ -26,6 +26,8 @@ namespace Ayr.Ui
         private const int BannerHeight = 38;
         private const string MsiSoftwareNotice = "MSI software is still installed and can undo your settings.";
         private const string MsiSoftwareAction = "Review";
+        private const string ReadFailed = "Ayr can't reach the laptop's fan and power controls. Restart Windows, then open Ayr again.";
+        private const string SettingsReadFailed = "Couldn't read your settings, so this page may be out of date. Restart Ayr if it keeps happening.";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(15);
         private static readonly TimeSpan ConfirmationShownFor = TimeSpan.FromSeconds(5);
@@ -50,6 +52,7 @@ namespace Ayr.Ui
         private bool _liveInFlight, _slowInFlight, _busy;
         private string _applyError;
         private string _readError;
+        private string _settingsReadError;
         private bool _msiCenterRunning;
         private int _msiItemsFound;
         private string _bannerText;
@@ -133,7 +136,7 @@ namespace Ayr.Ui
             Backend.Run(this, change, (message, error) =>
             {
                 SetBusy(false);
-                _applyError = error == null ? null : "Couldn't apply that change: " + ExceptionText.Of(error);
+                _applyError = error == null ? null : "Couldn't change that: " + ExceptionText.Of(error);
                 if (error == null)
                 {
                     ShowConfirmation(message);
@@ -191,8 +194,13 @@ namespace Ayr.Ui
             }
         }
 
+        // A failed change belongs to the page it was made on, so it doesn't follow the user to other pages.
         private void ShowPage(WindowPage page)
         {
+            if (page != _currentPage)
+            {
+                _applyError = null;
+            }
             _currentPage = page;
             _navigation.SelectedIndex = Array.IndexOf(_pages, page);
             foreach (WindowPage other in _pages)
@@ -206,9 +214,16 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            foreach (Control input in _pages.SelectMany(page => page.Inputs))
+            foreach (WindowPage page in _pages)
             {
-                input.Enabled = !busy;
+                foreach (Control input in page.Inputs)
+                {
+                    input.Enabled = !busy;
+                }
+                if (!busy)
+                {
+                    page.InputsReleased();
+                }
             }
             UseWaitCursor = busy;
         }
@@ -224,7 +239,7 @@ namespace Ayr.Ui
         // One line above the page: a failed change matters most, then unreadable hardware, then MSI software still installed.
         private void UpdateBanner()
         {
-            string error = _applyError ?? _readError;
+            string error = _applyError ?? _readError ?? _settingsReadError;
             bool msiInstalled = (_msiItemsFound > 0 || _msiCenterRunning) && _currentPage != _msiPage;
             string text = error ?? (msiInstalled ? MsiSoftwareNotice : null);
             string action = error == null && msiInstalled ? MsiSoftwareAction : null;
@@ -248,7 +263,11 @@ namespace Ayr.Ui
             Backend.Run(this, Backend.ReadLive, (live, error) =>
             {
                 _liveInFlight = false;
-                _readError = error == null ? null : "Couldn't read the hardware: " + error.Message;
+                if (error != null)
+                {
+                    ActivityLog.Write("reading the hardware failed: " + ExceptionText.Of(error));
+                }
+                _readError = error == null ? null : ReadFailed;
                 UpdateBanner();
                 if (error == null)
                 {
@@ -267,10 +286,14 @@ namespace Ayr.Ui
             Backend.Run(this, () => Backend.ReadSlow(includeAutostart), (slow, error) =>
             {
                 _slowInFlight = false;
-                if (error == null)
+                _settingsReadError = error == null ? null : SettingsReadFailed;
+                if (error != null)
                 {
-                    ShowSlow(slow);
+                    ActivityLog.Write("reading settings failed: " + ExceptionText.Of(error));
+                    UpdateBanner();
+                    return;
                 }
+                ShowSlow(slow);
             });
         }
 

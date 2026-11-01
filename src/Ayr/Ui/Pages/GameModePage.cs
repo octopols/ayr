@@ -52,10 +52,10 @@ namespace Ayr.Ui.Pages
             _toggle.Toggled += on => host.Apply(() => host.Backend.SetGameMode(on));
             _divider = AddTo(_settingsCard, new Panel { BackColor = theme.Border });
             _performanceLabel = AddTo(_settingsCard, Row("Performance", null));
-            _performance = AddTo(_settingsCard, Choices(GameProfile.PerformanceChoices));
+            _performance = AddTo(_settingsCard, Choices("Performance while gaming", GameProfile.PerformanceChoices));
             _performance.Picked += index => SaveProfile(_profile.WithPerformance(GameProfile.PerformanceChoices[index]));
             _fanLabel = AddTo(_settingsCard, Row("Fans", null));
-            _fan = AddTo(_settingsCard, Choices(GameProfile.FanChoices));
+            _fan = AddTo(_settingsCard, Choices("Fans while gaming", GameProfile.FanChoices));
             _fan.Picked += index => SaveProfile(_profile.WithFan(GameProfile.FanChoices[index]));
             _overclockRow = AddTo(_settingsCard, Row("GPU overclock", null));
             _overclock = AddTo(_settingsCard, SwitchFor(_overclockRow));
@@ -123,6 +123,19 @@ namespace Ayr.Ui.Pages
             _settingsCard.SetBounds(x, y, width, cardY + padding);
         }
 
+        private static string OverclockSubtitle(SlowState slow, GameProfile profile)
+        {
+            if (!slow.GpuOverclockAvailable)
+            {
+                return "Ayr can't overclock this graphics card";
+            }
+            if (profile.Performance != PerformanceLevel.Turbo)
+            {
+                return "Only works with Turbo";
+            }
+            return slow.Desired.TurboOffsets.RaisesClocks ? "Uses the amounts on the Performance page" : "Set to +0 on the Performance page";
+        }
+
         private void LayoutGames(int x, int y, int width, int bottom)
         {
             int padding = Scale(CardPadding);
@@ -151,8 +164,8 @@ namespace Ayr.Ui.Pages
             _performance.SelectedIndex = GameProfile.PerformanceChoices.IndexOf(profile.Performance);
             _fan.SelectedIndex = GameProfile.FanChoices.IndexOf(profile.Fan);
             _overclock.Checked = profile.Overclock;
-            _overclockRow.SetSubtitle(profile.Performance != PerformanceLevel.Turbo ? "Only works with Turbo"
-                : "Set on the Performance page");
+            _overclockRow.SetSubtitle(OverclockSubtitle(slow, profile));
+            _overclock.Visible = slow.GpuOverclockAvailable;
             bool highestChanged = profile.Equals(GameProfile.Highest) != _profile.Equals(GameProfile.Highest);
             _profile = profile;
             if (highestChanged)
