@@ -135,9 +135,6 @@ namespace Ayr.Ui.Pages
 
         private IReadOnlyList<Entry> SelectedEntries => _entries.Where(entry => entry.Row.Selected).ToList();
 
-        // Results are delivered through the window: a page that has never been shown has no handle to deliver them to.
-        private Control Window => FindForm() ?? (Control)this;
-
         public void ScanOnce()
         {
             if (_stage == Stage.NotScanned)

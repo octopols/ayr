@@ -15,6 +15,9 @@ namespace Ayr.Ui.Controls
         /// <summary>Wraps onto further lines from the top instead of cutting off one centred line.</summary>
         public bool Wraps { get; set; }
 
+        public int WrappedHeight(int width) =>
+            TextRenderer.MeasureText(Text, Theme.Small, new Size(width, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.NoPrefix).Height;
+
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(BackColor);

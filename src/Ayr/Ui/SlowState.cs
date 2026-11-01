@@ -12,7 +12,7 @@ namespace Ayr.Ui
     {
         public SlowState(DesiredState desired, CurveTemperatures curveTemperatures, int? chargeLimitPercent, GameOverview games,
             IReadOnlyList<AppleDeviceStatus> appleDevices, DateTime nextAppleRequestAllowedAt, bool? autostartOn, bool msiCenterRunning,
-            FnKeyBindings fnKeys, BatteryHealth batteryHealth, CalibrationView calibration)
+            FnKeyBindings fnKeys, BatteryHealth batteryHealth, int? batteryPercent, CalibrationView calibration)
         {
             Desired = desired;
             CurveTemperatures = curveTemperatures;
@@ -24,6 +24,7 @@ namespace Ayr.Ui
             MsiCenterRunning = msiCenterRunning;
             FnKeys = fnKeys;
             BatteryHealth = batteryHealth;
+            BatteryPercent = batteryPercent;
             Calibration = calibration;
         }
 
@@ -45,6 +46,9 @@ namespace Ayr.Ui
 
         /// <summary>Null when the battery doesn't report its capacities.</summary>
         public BatteryHealth BatteryHealth { get; }
+
+        /// <summary>How full the battery is now; null when Windows can't say.</summary>
+        public int? BatteryPercent { get; }
 
         /// <summary>Null on laptops without the firmware switch calibration needs.</summary>
         public CalibrationView Calibration { get; }
