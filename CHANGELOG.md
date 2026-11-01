@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.8.0 (2026-11-02)
+
+- **Long jobs are safe:** automatic updates, "Check for updates" and Exit wait while a battery calibration or MSI
+  software removal is running, and Exit says what it would stop. A calibration that can't read the battery is refused
+  with a reason instead of staying on "Starting".
+- **Battery calibration explains itself:** Calibrate says when the charger needs plugging in; the confirmation says how
+  long it takes and that the laptop won't sleep meanwhile; while it runs the page says what to do, and warns if the
+  charger is pulled.
+- **MSI software page:** the result is never cut off and leads with "Restart Windows to finish removing"; the
+  confirmation says what can't be undone; an incomplete scan says so; a removal that couldn't start can be retried.
+- Errors are plain words with a next step, and the banner clears when you change page. Quick panel confirmations stay
+  visible, and Fn-key failures show a notification.
+- One name per setting across the window, quick panel and tray; the GPU overclock says when it adds nothing.
+- Keyboard and screen readers: only controls you operate take focus, holding Enter can't skip a confirmation, and
+  choices, rows, status lines and the banner are named and announced.
+
 ## 0.7.0 (2026-11-02)
 
 - **Battery facts:** under the health verdict, the Battery page lists the battery's capacity, the week it last ran the
