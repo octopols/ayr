@@ -23,10 +23,14 @@ namespace Ayr.Ui.Controls
                 Invalidate();
                 ValueChanged?.Invoke(value);
             };
+            _slider.ValueCommitted += value => ValueCommitted?.Invoke(value);
             Controls.Add(_slider);
         }
 
         public event Action<int> ValueChanged;
+
+        /// <summary>Raised once the user has finished moving the slider.</summary>
+        public event Action<int> ValueCommitted;
 
         public int Value
         {

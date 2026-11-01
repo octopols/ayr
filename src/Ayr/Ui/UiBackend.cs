@@ -6,6 +6,7 @@ using Ayr.App;
 using Ayr.Apple;
 using Ayr.Controllers;
 using Ayr.Games;
+using Ayr.Hardware;
 using Ayr.Updates;
 
 namespace Ayr.Ui
@@ -43,11 +44,16 @@ namespace Ayr.Ui
         /// <summary>Like Run for update work, which only waits on the network and must not hold up hardware reads.</summary>
         public void RunUpdate<T>(Control owner, Func<T> work, Action<T, Exception> done) => RunOnPool(owner, work, done, _oneUpdateAtATime);
 
-        public LiveState ReadLive() =>
-            new LiveState(_hardware.Fans.ReadMode(), _hardware.Performance.ReadLevel(), _hardware.Telemetry.Sample());
+        public LiveState ReadLive() => new LiveState(
+            _hardware.Fans.ReadMode(),
+            _hardware.Performance.ReadLevel(),
+            _hardware.Telemetry.Sample(),
+            ReadIfAvailable(() => _hardware.KeyboardLight.IsSupported, _hardware.KeyboardLight.ReadLevel));
 
         public SlowState ReadSlow(bool includeAutostart) => new SlowState(
             DesiredState.Load(),
+            new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
+            ReadIfAvailable(() => _hardware.ChargeLimit.IsSupported, _hardware.ChargeLimit.ReadPercent),
             _games.Overview(),
             _charger.ConnectedStatuses(),
             _charger.NextRequestAllowedAt,
@@ -65,6 +71,24 @@ namespace Ayr.Ui
             }
             ModeChanged?.Invoke(new ModeChange(mode + " mode", "Fan profile updated", OsdIcon.Fan));
             return mode + " mode applied";
+        }
+
+        public string ApplyCustomCurves(FanCurves curves)
+        {
+            _modes.ApplyCustomCurves(curves);
+            return "Custom curve applied";
+        }
+
+        public string ApplyChargeLimit(int percent)
+        {
+            _modes.ApplyChargeLimit(percent);
+            return percent == ChargeLimitController.Full ? "Charging to full" : "Charging stops at " + percent + "%";
+        }
+
+        public string ApplyKeyboardLight(int level)
+        {
+            _modes.ApplyKeyboardLight(level);
+            return "Keyboard light " + KeyboardLightController.LevelNames[level].ToLowerInvariant();
         }
 
         public string ApplyPerformance(PerformanceLevel level)
@@ -181,6 +205,20 @@ namespace Ayr.Ui
             }
             InstallUpdate(release);
             return release.Version;
+        }
+
+        // Charge limit and keyboard light live only in EC RAM, at addresses known for some firmware only. Where either isn't
+        // the case, their controls are simply hidden.
+        private static int? ReadIfAvailable(Func<bool> isSupported, Func<int> read)
+        {
+            try
+            {
+                return isSupported() ? read() : (int?)null;
+            }
+            catch (EcUnavailableException)
+            {
+                return null;
+            }
         }
 
         private static void RunOnPool<T>(Control owner, Func<T> work, Action<T, Exception> done, object exclusive)

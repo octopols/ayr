@@ -11,6 +11,8 @@ namespace Ayr.Controllers
             Fans = new FanController(Wmi, Ec);
             Performance = new PerformanceController(Wmi);
             Telemetry = new Telemetry(Wmi);
+            ChargeLimit = new ChargeLimitController(Ec);
+            KeyboardLight = new KeyboardLightController(Ec);
         }
 
         public WmiBlockClient Wmi { get; }
@@ -18,5 +20,7 @@ namespace Ayr.Controllers
         public FanController Fans { get; }
         public PerformanceController Performance { get; }
         public Telemetry Telemetry { get; }
+        public ChargeLimitController ChargeLimit { get; }
+        public KeyboardLightController KeyboardLight { get; }
     }
 }

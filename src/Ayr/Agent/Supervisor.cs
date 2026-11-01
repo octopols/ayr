@@ -315,6 +315,10 @@ namespace Ayr.Agent
                 {
                     ApplyEveryday(desired);
                 }
+                if (desired.ChargeLimitPercent.HasValue)
+                {
+                    _hardware.ChargeLimit.Apply(desired.ChargeLimitPercent.Value);
+                }
             }
             catch (Exception ex)
             {
@@ -325,16 +329,13 @@ namespace Ayr.Agent
 
         private void ApplyGameProfile(DesiredState desired)
         {
-            _hardware.Fans.Apply(GameModeController.GamingFan);
+            _hardware.Fans.Apply(GameModeController.GamingFan, desired.CustomCurves);
             _hardware.Performance.Apply(GameModeController.GamingPerformance, desired.TurboOffsets);
         }
 
         private void ApplyEveryday(DesiredState desired)
         {
-            if (desired.Fan != FanMode.Custom)
-            {
-                _hardware.Fans.Apply(desired.Fan);
-            }
+            _hardware.Fans.Apply(desired.Fan, desired.CustomCurves);
             if (desired.Performance != PerformanceLevel.Unknown)
             {
                 _hardware.Performance.Apply(desired.Performance, desired.TurboOffsets);

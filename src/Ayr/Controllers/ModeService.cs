@@ -19,9 +19,39 @@ namespace Ayr.Controllers
 
         public void ApplyFan(FanMode mode)
         {
-            RunTransaction(includeGpu: false, apply: () => _hardware.Fans.Apply(mode));
+            FanCurves custom = DesiredState.Load().CustomCurves;
+            RunTransaction(includeGpu: false, apply: () => _hardware.Fans.Apply(mode, custom));
             DesiredState.Update(state => state.Fan = mode);
             ActivityLog.Write("fan -> " + mode);
+        }
+
+        /// <summary>Saves the custom curves and switches to them, so the change is felt right away.</summary>
+        public void ApplyCustomCurves(FanCurves curves)
+        {
+            DesiredState.Update(state => state.CustomCurves = curves);
+            ActivityLog.Write("custom fan curve -> CPU " + FanCurves.Format(curves.Cpu) + ", GPU " + FanCurves.Format(curves.Gpu));
+            ApplyFan(FanMode.Custom);
+        }
+
+        public void ApplyChargeLimit(int percent)
+        {
+            _hardware.ChargeLimit.Apply(percent);
+            DesiredState.Update(state =>
+            {
+                state.ChargeLimitPercent = percent;
+                if (percent != ChargeLimitController.Full)
+                {
+                    state.CustomChargePercent = percent;
+                }
+            });
+            ActivityLog.Write("charge limit -> " + percent + "%");
+        }
+
+        // Not saved: the Fn keys change the backlight too, and the keyboard keeps whatever was set last.
+        public void ApplyKeyboardLight(int level)
+        {
+            _hardware.KeyboardLight.Apply(level);
+            ActivityLog.Write("keyboard light -> " + level);
         }
 
         public void ApplyPerformance(PerformanceLevel level)
@@ -64,7 +94,7 @@ namespace Ayr.Controllers
         public void FailsafeAuto(string reason)
         {
             ActivityLog.Write("FAILSAFE auto: " + reason);
-            _hardware.Fans.Apply(FanMode.Auto);
+            _hardware.Fans.Apply(FanMode.Auto, FanCurves.Stock);
             DesiredState.Update(state => state.Fan = FanMode.Auto);
         }
 

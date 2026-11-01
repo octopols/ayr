@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Management;
 using Ayr.Agent;
 using Ayr.App;
@@ -14,13 +16,17 @@ namespace Ayr.Cli
     {
         private const string Usage =
 @"ayrctl status                        fan mode, perf level, temps, duty, RPM, GPU offsets
-ayrctl fan auto|max|silent|boost
+ayrctl fan auto|max|silent|boost|custom
+ayrctl curve                         show the custom fan curves and the temperature of each point
+ayrctl curve cpu|gpu <7 values>      set a custom curve in %, e.g. 30,40,50,60,70,85,100, and switch to it
 ayrctl perf turbo|high|medium|low     turbo also applies the Turbo GPU offsets
 ayrctl perf turbo <core> <memory>     set the Turbo GPU offsets and switch to Turbo
 ayrctl oc                            show the Turbo GPU offsets and their limits
 ayrctl oc <core> <memory>            set the Turbo GPU offsets in MHz (core 0-180, memory 0-500);
                                      applied at once if Turbo is active, otherwise kept for Turbo
 ayrctl apply                         firmware handshake + saved settings (what MSI's services did at boot)
+ayrctl charge full|<50-95>           charge the battery to full, or stop at this percentage
+ayrctl light off|low|medium|high     keyboard backlight
 ayrctl autostart [on|off]            logon task that applies saved settings and runs the background guard
 ayrctl tray                          tray icon with the same controls
 ayrctl uninstall                     fans to Auto, remove the logon task and Ayr's driver entries
@@ -50,6 +56,12 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     return WithElevationFallback(ShowStatus);
                 case "fan":
                     return WithElevation(SetFan);
+                case "curve":
+                    return CustomCurveCommand();
+                case "charge":
+                    return ChargeLimitCommand();
+                case "light":
+                    return KeyboardLightCommand();
                 case "perf":
                     return SetPerformanceCommand();
                 case "oc":
@@ -106,7 +118,7 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
         {
             if (!Enum.TryParse(Argument(1), true, out FanMode mode) || !FanController.SelectableModes.Contains(mode))
             {
-                _output.WriteLine("fan mode must be one of: auto, max, silent, boost");
+                _output.WriteLine("fan mode must be one of: auto, max, silent, boost, custom");
                 return ExitCode.Usage;
             }
             var hardware = new HardwareContext();
@@ -130,7 +142,77 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
             return ExitCode.Success;
         }
 
-        // Offsets are validated before any elevation prompt, so a typo never costs a UAC click.
+        // Values are validated before any elevation prompt, so a typo never costs a UAC click.
+        private ExitCode CustomCurveCommand()
+        {
+            string fanName = Argument(1);
+            if (fanName == null)
+            {
+                return WithElevationFallback(ShowCustomCurves);
+            }
+            if (!Enum.TryParse(fanName, true, out FanKind fan) || !FanCurves.TryParse(Argument(2), out byte[] curve))
+            {
+                _output.WriteLine("usage: ayrctl curve cpu|gpu <7 values from 0 to 100, separated by commas>");
+                return ExitCode.Usage;
+            }
+            return WithElevation(() =>
+            {
+                FanCurves saved = DesiredState.Load().CustomCurves;
+                FanCurves wanted = fan == FanKind.Cpu ? new FanCurves(curve, saved.Gpu) : new FanCurves(saved.Cpu, curve);
+                new ModeService(new HardwareContext()).ApplyCustomCurves(wanted);
+                return ShowCustomCurves();
+            });
+        }
+
+        private ExitCode ShowCustomCurves()
+        {
+            var hardware = new HardwareContext();
+            FanCurves curves = DesiredState.Load().CustomCurves;
+            foreach (FanKind fan in new[] { FanKind.Cpu, FanKind.Gpu })
+            {
+                int[] temperatures = hardware.Fans.ReadPointTemperatures(fan);
+                IReadOnlyList<byte> duties = curves.For(fan);
+                string points = string.Join("  ", temperatures.Select((temperature, point) =>
+                    (point == 0 ? "below " + temperatures[1] : "from " + temperature) + "°C: " + duties[point] + "%"));
+                _output.WriteLine("{0}  {1}", fan.ToString().ToUpperInvariant(), points);
+            }
+            _output.WriteLine("The two hottest points never go below Auto's speed, and no point is lower than the one before it.");
+            return ExitCode.Success;
+        }
+
+        private ExitCode ChargeLimitCommand()
+        {
+            int percent = ChargeLimitController.Full;
+            bool valid = Argument(1) == "full" || (int.TryParse(Argument(1), out percent) && ChargeLimitController.IsValid(percent));
+            if (!valid)
+            {
+                _output.WriteLine("usage: ayrctl charge full|<{0}-{1}>", ChargeLimitController.MinimumCustom, ChargeLimitController.MaximumCustom);
+                return ExitCode.Usage;
+            }
+            return WithElevation(() =>
+            {
+                new ModeService(new HardwareContext()).ApplyChargeLimit(percent);
+                _output.WriteLine(percent == ChargeLimitController.Full ? "The battery charges to full." : "The battery stops charging at " + percent + "%.");
+                return ExitCode.Success;
+            });
+        }
+
+        private ExitCode KeyboardLightCommand()
+        {
+            int level = KeyboardLightController.LevelNames.Select(name => name.ToLowerInvariant()).ToList().IndexOf(Argument(1) ?? "");
+            if (level < 0)
+            {
+                _output.WriteLine("usage: ayrctl light off|low|medium|high");
+                return ExitCode.Usage;
+            }
+            return WithElevation(() =>
+            {
+                new ModeService(new HardwareContext()).ApplyKeyboardLight(level);
+                _output.WriteLine("Keyboard light: {0}.", KeyboardLightController.LevelNames[level]);
+                return ExitCode.Success;
+            });
+        }
+
         private ExitCode SetPerformanceCommand()
         {
             if (!TryParseOffsets(firstIndex: 2, out GpuOffsets offsets))

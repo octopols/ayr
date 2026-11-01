@@ -25,8 +25,23 @@ namespace Ayr.Hardware
         public const byte CoolerBoostRegister = 0x98;
         public const byte CoolerBoostBit = 0x80;
 
+        // Not mirrored in MSI_System, so reached through EC RAM. Layout as in the Linux msi-ec driver's table for this
+        // firmware: bit 7 enables the limit, the low bits are the percentage (0xE4 = no limit, 100%).
+        public const byte ChargeLimitRegister = 0xEF;
+        public const byte ChargeLimitEnableBit = 0x80;
+
+        // Keyboard backlight: 0x80 plus the level, 0 (off) to 3. The Fn keys change the same register.
+        public const byte KeyboardLightRegister = 0xF3;
+        public const byte KeyboardLightBase = 0x80;
+        public const int KeyboardLightMaxLevel = 3;
+
         public const int TemperatureIndex = 1;
         public const int DutyIndex = 2;
+
+        // Each curve point applies from a temperature threshold: point 0 below the first threshold, point i from
+        // threshold i-1 (MSI_CPU / MSI_VGA [5..10]).
+        public const int ThresholdFirstIndex = 5;
+        public const int ThresholdCount = 6;
         public const int CurveFirstIndex = 11;
         public const int CurvePointCount = 7;
 

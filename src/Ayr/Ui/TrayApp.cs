@@ -1,10 +1,12 @@
 using System;
 using System.Drawing;
+using System.Management;
 using System.Threading;
 using System.Windows.Forms;
 using Ayr.Agent;
 using Ayr.App;
 using Ayr.Controllers;
+using Ayr.Hardware;
 
 namespace Ayr.Ui
 {
@@ -33,6 +35,7 @@ namespace Ayr.Ui
         private readonly Supervisor _supervisor;
         private readonly Thread _supervisorThread;
         private readonly AutoUpdateTimer _autoUpdate;
+        private readonly FirmwareKeyWatcher _keys;
         private MainWindow _main;
         private QuickPanel _quick;
         private TrayAnchor _anchor;
@@ -58,6 +61,7 @@ namespace Ayr.Ui
             _notifyIcon.MouseClick += (sender, e) => ToggleQuickPanel();
             _notifyIcon.MouseDoubleClick += (sender, e) => OpenMainWindow();
             _notifyIcon.MouseMove += (sender, e) => RefreshTooltip();
+            _keys = WatchFirmwareKeys();
 
             _supervisor = new Supervisor(_hardware, stayAliveWhenIdle: true, notify: ShowWarning);
             // The thread carries the Silent thermal guard, which must stay prompt even in efficiency mode.
@@ -73,6 +77,7 @@ namespace Ayr.Ui
         protected override void ExitThreadCore()
         {
             _autoUpdate.Dispose();
+            _keys?.Dispose();
             _main?.Close();
             _quick?.Close();
             _supervisor.Stop();
@@ -86,6 +91,28 @@ namespace Ayr.Ui
             _trayIcon.Dispose();
             _uiThread.Dispose();
             base.ExitThreadCore();
+        }
+
+        // Fn+F7 is a convenience: on a laptop whose firmware doesn't raise the event, the tray works without it.
+        private FirmwareKeyWatcher WatchFirmwareKeys()
+        {
+            try
+            {
+                var keys = new FirmwareKeyWatcher();
+                keys.OpenAppPressed += () => _uiThread.BeginInvoke((Action)OpenFromKeyboard);
+                return keys;
+            }
+            catch (ManagementException ex)
+            {
+                ActivityLog.Write("Fn+F7 not available: " + ex.Message);
+                return null;
+            }
+        }
+
+        private void OpenFromKeyboard()
+        {
+            _anchor = TrayAnchor.ForNotificationArea();
+            ToggleQuickPanel();
         }
 
         // Stopping the supervisor switches Silent to Auto and saves that; the new version should start from the user's choice.

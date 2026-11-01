@@ -41,10 +41,14 @@ through the same firmware interfaces, from a 200 KB app:
 
 | Feature | What it does |
 |---|---|
-| Fan modes | Auto, Max, Silent and Boost (Cooler Boost). Silent switches back to Auto at 90 °C. |
+| Fan modes | Auto, Max, Silent, Boost (Cooler Boost) and Custom. Silent switches back to Auto at 90 °C. |
+| Custom fan curve | Drag the CPU and GPU curves. The hottest points never go below Auto's speed. |
 | Performance | Turbo, High, Medium and Low: MSI's own power profiles. |
 | GPU overclock | Core and memory offsets in Turbo, within MSI's limits, kept across driver resets and sleep. |
 | Game mode | Turbo, GPU overclock and Cooler Boost while one of your games runs, then back to your everyday settings. Finds your games for you. |
+| Charge limit | Full, or stop at 50 to 95% so a mostly plugged-in battery lasts longer. |
+| Keyboard light | Off, Low, Medium or High. |
+| Fn+F7 | Opens Ayr's quick menu, the key that used to open Dragon Center. |
 | Start with Windows | Restores your settings at sign-in. |
 | Apple fast charge | *Experimental.* MSI Super Charger's fast-charge request for iPhone and iPad, automatic or per device. [Details](docs/apple-fast-charge.md) |
 | Updates | Checks GitHub once a day and installs verified updates. Can be turned off. |
@@ -54,9 +58,9 @@ through the same firmware interfaces, from a 200 KB app:
 
 Ayr writes to the laptop's embedded controller, so it only changes modes on models that have been checked.
 
-| Device | Fan modes | Cooler Boost | Performance | GPU overclock | Apple fast charge | Start with Windows |
-|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| MSI GF65 Thin 10SDR | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/partial.svg" width="16" alt="Partly tested"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> |
+| Device | Fan modes | Cooler Boost | Performance | GPU overclock | Charge limit | Keyboard light | Apple fast charge | Start with Windows |
+|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| MSI GF65 Thin 10SDR | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> | <img src="docs/images/status/partial.svg" width="16" alt="Partly tested"> | <img src="docs/images/status/partial.svg" width="16" alt="Partly tested"> | <img src="docs/images/status/works.svg" width="16" alt="Works"> |
 
 <img src="docs/images/status/works.svg" width="12" alt=""> Works &nbsp;
 <img src="docs/images/status/partial.svg" width="12" alt=""> Partly tested &nbsp;
@@ -87,8 +91,11 @@ Needs Windows 10 or 11, 64-bit.
 
 ```text
 ayrctl status                      current modes, temperatures, fan speeds, GPU offsets
-ayrctl fan auto|max|silent|boost
+ayrctl fan auto|max|silent|boost|custom
+ayrctl curve cpu|gpu <7 values>    custom fan curve in %
 ayrctl perf turbo|high|medium|low
+ayrctl charge full|<50-95>         battery charge limit
+ayrctl light off|low|medium|high   keyboard light
 ayrctl oc <core> <memory>          Turbo GPU offsets in MHz
 ayrctl game on|off|add|remove      Game mode and your games
 ayrctl apple on|off|send           Apple fast charge

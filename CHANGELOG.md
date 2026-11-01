@@ -1,7 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 (2026-11-01)
 
+- **Custom fan curve:** a fifth fan mode. Drag the points of the CPU and GPU curves, labelled with your firmware's
+  own temperatures; changes apply when you let go. The hottest points can't go below Auto's speed, and no point can be
+  lower than the one before it.
+- **Charge limit:** Full, or a custom limit from 50 to 95% to make a mostly plugged-in battery last longer. Ayr
+  re-applies it at sign-in and after sleep.
+- **Keyboard light:** Off, Low, Medium or High, in step with the Fn keys.
+- Charge limit and keyboard light only appear on laptops whose EC firmware is known to keep them where Ayr writes them
+  (GF63 and GF65 Thin, 9th and 10th generation, for now).
+- **Fn+F7** opens Ayr's quick menu. It opened Dragon Center before, and did nothing once MSI's apps were removed.
+- The tray menu shows all five fan modes in one row.
+- `ayrctl fan custom`, `ayrctl curve`, `ayrctl charge`, `ayrctl light`.
 - Game mode also finds GOG and Ubisoft Connect games.
 - A launcher's damaged record no longer hides the other games it lists.
 - `ayrctl game add` and `remove` take one path; quote it if it has spaces.
