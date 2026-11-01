@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Text;
 using Microsoft.Win32.SafeHandles;
 
 namespace Ayr.Interop
@@ -13,6 +14,7 @@ namespace Ayr.Interop
         public const int ProcessPowerThrottling = 4;
         public const uint PowerThrottlingExecutionSpeed = 0x1;
         public const uint PowerThrottlingCurrentVersion = 1;
+        public const uint ProcessQueryLimitedInformation = 0x1000;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct PowerThrottlingState
@@ -57,5 +59,12 @@ namespace Ayr.Interop
         [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool SetProcessInformation(IntPtr process, int infoClass, ref PowerThrottlingState info, int size);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern SafeProcessHandle OpenProcess(uint access, [MarshalAs(UnmanagedType.Bool)] bool inherit, int processId);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder path, ref int size);
     }
 }

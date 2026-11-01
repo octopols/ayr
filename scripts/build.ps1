@@ -7,7 +7,7 @@
 [CmdletBinding()]
 param(
     [string]$OutDir = (Join-Path $PSScriptRoot '..\bin'),
-    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.2.0',
+    [ValidatePattern('^\d+\.\d+\.\d+$')][string]$Version = '0.3.0',
     [string]$InformationalVersion = $Version
 )
 $ErrorActionPreference = 'Stop'

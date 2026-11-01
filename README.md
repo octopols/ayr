@@ -44,6 +44,7 @@ through the same firmware interfaces, from a 200 KB app:
 | Fan modes | Auto, Max, Silent and Boost (Cooler Boost). Silent switches back to Auto at 90 °C. |
 | Performance | Turbo, High, Medium and Low: MSI's own power profiles. |
 | GPU overclock | Core and memory offsets in Turbo, within MSI's limits, kept across driver resets and sleep. |
+| Game mode | Turbo, GPU overclock and Cooler Boost while one of your games runs, then back to your everyday settings. Finds your games for you. |
 | Start with Windows | Restores your settings at sign-in. |
 | Apple fast charge | *Experimental.* MSI Super Charger's fast-charge request for iPhone and iPad, automatic or per device. [Details](docs/apple-fast-charge.md) |
 | Updates | Checks GitHub once a day and installs verified updates. Can be turned off. |
@@ -89,6 +90,7 @@ ayrctl status                      current modes, temperatures, fan speeds, GPU 
 ayrctl fan auto|max|silent|boost
 ayrctl perf turbo|high|medium|low
 ayrctl oc <core> <memory>          Turbo GPU offsets in MHz
+ayrctl game on|off|add|remove      Game mode and your games
 ayrctl apple on|off|send           Apple fast charge
 ayrctl help                        all commands
 ```
@@ -130,6 +132,7 @@ src/Ayr
 ├── Hardware      EC, WMI, GPU and driver access
 ├── Controllers   fan and performance logic, snapshots
 ├── Agent         background guard
+├── Games         Game mode: finding games, watching them run
 ├── Apple         Apple fast charge
 ├── Updates       update check and install
 ├── Cli           ayrctl commands

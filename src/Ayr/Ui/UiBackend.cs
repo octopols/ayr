@@ -5,6 +5,7 @@ using Ayr.Agent;
 using Ayr.App;
 using Ayr.Apple;
 using Ayr.Controllers;
+using Ayr.Games;
 using Ayr.Updates;
 
 namespace Ayr.Ui
@@ -19,6 +20,7 @@ namespace Ayr.Ui
         private readonly ModeService _modes;
         private readonly AppleChargeController _charger = new AppleChargeController();
         private readonly AutostartTask _autostart = new AutostartTask();
+        private readonly GameModeController _games = new GameModeController();
         private readonly GitHubReleaseFeed _releases = new GitHubReleaseFeed();
         private readonly UpdateInstaller _installer = new UpdateInstaller();
         private readonly object _oneCallAtATime = new object();
@@ -46,6 +48,7 @@ namespace Ayr.Ui
 
         public SlowState ReadSlow(bool includeAutostart) => new SlowState(
             DesiredState.Load(),
+            _games.Overview(),
             _charger.ConnectedStatuses(),
             _charger.NextRequestAllowedAt,
             includeAutostart ? _autostart.IsInstalled : (bool?)null,
@@ -85,6 +88,36 @@ namespace Ayr.Ui
                 Supervisor.EnsureBackgroundInstance();
             }
             return applied ? "GPU offsets applied: " + offsets : "GPU offsets saved for the next Turbo session";
+        }
+
+        public string SetGameMode(bool on)
+        {
+            _games.SetEnabled(on);
+            if (on)
+            {
+                Supervisor.EnsureBackgroundInstance();
+            }
+            return on ? "Game mode on" : "Game mode off";
+        }
+
+        public string AddGame(GameEntry game)
+        {
+            _games.Add(game);
+            return game.Name + " added";
+        }
+
+        public string AddGamePath(string path) => _games.AddPath(path).Name + " added";
+
+        public string ScanForGames()
+        {
+            int found = _games.ScanAgain();
+            return found == 1 ? "1 game found on this PC" : found + " games found on this PC";
+        }
+
+        public string RemoveGame(GameEntry game)
+        {
+            _games.Remove(game);
+            return game.Name + " removed";
         }
 
         /// <summary>Switching it on also sends to devices already connected, rather than waiting for the next plug-in.</summary>

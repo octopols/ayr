@@ -5,6 +5,7 @@ using Microsoft.Win32;
 using Ayr.App;
 using Ayr.Apple;
 using Ayr.Controllers;
+using Ayr.Games;
 using Ayr.Hardware;
 
 namespace Ayr.Agent
@@ -15,6 +16,7 @@ namespace Ayr.Agent
     ///  - Turbo: GPU offsets reapplied after a driver reset, since NVAPI offsets do not survive one.
     ///  - Resume from sleep: the saved fan mode and performance level reapplied.
     ///  - Automatic Apple fast charge: one request for each Apple device per connection.
+    ///  - Game mode: the game profile while one of the user's games runs, the everyday settings again once it closes.
     /// It never "corrects" a mode changed elsewhere. A sentinel process forces Auto if this one dies while Silent.
     /// </summary>
     public sealed class Supervisor : IDisposable
@@ -28,6 +30,7 @@ namespace Ayr.Agent
         private static readonly TimeSpan StartTimeout = TimeSpan.FromSeconds(3);
         private const int GpuCheckEveryTicks = 5;
         private const int MaxConsecutiveReadFailures = 3;
+        private static readonly TimeSpan GameWatchRetryDelay = TimeSpan.FromMinutes(1);
 
         private readonly HardwareContext _hardware;
         private readonly ModeService _modes;
@@ -38,6 +41,9 @@ namespace Ayr.Agent
         private Process _sentinel;
         private int _readFailures;
         private volatile bool _resumePending;
+        private GameWatcher _games;
+        private string _activeGame;
+        private DateTime _nextGameWatchAttempt = DateTime.MinValue;
 
         public Supervisor(HardwareContext hardware, bool stayAliveWhenIdle, Action<string> notify)
         {
@@ -117,12 +123,14 @@ namespace Ayr.Agent
                         _resumePending = false;
                         ReapplyAfterResume(desired);
                     }
+                    TrackGames(desired);
                     GuardSilent(desired);
                     if (desired.AppleAutoFastCharge)
                     {
                         WatchApple();
                     }
-                    if (desired.Performance == PerformanceLevel.Turbo && tick % GpuCheckEveryTicks == 0)
+                    bool turboWanted = desired.Performance == PerformanceLevel.Turbo || _activeGame != null;
+                    if (turboWanted && tick % GpuCheckEveryTicks == 0)
                     {
                         KeepTurboOffsets(desired.TurboOffsets);
                     }
@@ -136,6 +144,7 @@ namespace Ayr.Agent
             finally
             {
                 SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+                StopWatchingGames();
                 if (SafeReadMode() == FanMode.Silent)
                 {
                     SafeFailsafe("supervisor exiting while Silent");
@@ -219,25 +228,116 @@ namespace Ayr.Agent
             }
         }
 
+        // Game mode is a convenience: a failure is logged and retried later, and must never take down the thermal guard.
+        private void TrackGames(DesiredState desired)
+        {
+            try
+            {
+                if (!desired.GameMode)
+                {
+                    DisposeGameWatcher();
+                }
+                else if (_games == null && DateTime.Now >= _nextGameWatchAttempt)
+                {
+                    _games = new GameWatcher();
+                }
+                string game = _games?.ActiveGame;
+                if (game == _activeGame)
+                {
+                    return;
+                }
+                if (game != null)
+                {
+                    EnterGameMode(game, desired);
+                }
+                else
+                {
+                    LeaveGameMode(desired);
+                }
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("game mode failed: " + ex.Message);
+                DisposeGameWatcher();
+                _nextGameWatchAttempt = DateTime.Now + GameWatchRetryDelay;
+            }
+        }
+
+        private void EnterGameMode(string game, DesiredState desired)
+        {
+            ApplyGameProfile(desired);
+            _activeGame = game;
+            ActivityLog.Write("game mode on: " + game + " (" + GameModeController.GamingPerformance + " " + desired.TurboOffsets + ", fans " + GameModeController.GamingFan + ")");
+        }
+
+        private void LeaveGameMode(DesiredState desired)
+        {
+            ApplyEveryday(desired);
+            ActivityLog.Write("game mode off: " + _activeGame + " closed; back to fan " + desired.Fan + ", perf " + desired.Performance);
+            _activeGame = null;
+        }
+
+        // Leaving the PC in the game profile after Ayr exits would quietly keep it loud and hot.
+        private void StopWatchingGames()
+        {
+            DisposeGameWatcher();
+            if (_activeGame == null)
+            {
+                return;
+            }
+            try
+            {
+                LeaveGameMode(DesiredState.Load());
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("restoring everyday settings after game mode failed: " + ex.Message);
+            }
+        }
+
+        private void DisposeGameWatcher()
+        {
+            _games?.Dispose();
+            _games = null;
+        }
+
         private void ReapplyAfterResume(DesiredState desired)
         {
             Thread.Sleep(ResumeSettleTime);
-            ActivityLog.Write("resume: reapplying fan=" + desired.Fan + " perf=" + desired.Performance);
+            ActivityLog.Write("resume: reapplying " + (_activeGame != null ? "game mode for " + _activeGame : "fan=" + desired.Fan + " perf=" + desired.Performance));
             try
             {
-                if (desired.Fan != FanMode.Custom)
+                if (_activeGame != null)
                 {
-                    _hardware.Fans.Apply(desired.Fan);
+                    ApplyGameProfile(desired);
                 }
-                if (desired.Performance != PerformanceLevel.Unknown)
+                else
                 {
-                    _hardware.Performance.Apply(desired.Performance, desired.TurboOffsets);
+                    ApplyEveryday(desired);
                 }
             }
             catch (Exception ex)
             {
                 ActivityLog.Write("resume reapply failed: " + ex.Message);
                 SafeFailsafe("resume reapply failed");
+            }
+        }
+
+        private void ApplyGameProfile(DesiredState desired)
+        {
+            _hardware.Fans.Apply(GameModeController.GamingFan);
+            _hardware.Performance.Apply(GameModeController.GamingPerformance, desired.TurboOffsets);
+        }
+
+        private void ApplyEveryday(DesiredState desired)
+        {
+            if (desired.Fan != FanMode.Custom)
+            {
+                _hardware.Fans.Apply(desired.Fan);
+            }
+            if (desired.Performance != PerformanceLevel.Unknown)
+            {
+                _hardware.Performance.Apply(desired.Performance, desired.TurboOffsets);
             }
         }
 

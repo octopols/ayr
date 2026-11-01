@@ -24,6 +24,7 @@ ayrctl apply                         firmware handshake + saved settings (what M
 ayrctl autostart [on|off]            logon task that applies saved settings and runs the background guard
 ayrctl tray                          tray icon with the same controls
 ayrctl uninstall                     fans to Auto, remove the logon task and Ayr's driver entries
+" + GameCommands.Usage + @"
 " + AppleCommands.Usage + @"
 
 Diagnostics
@@ -59,6 +60,8 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
                     return WithElevation(Autostart);
                 case "uninstall":
                     return WithElevation(Uninstall);
+                case "game":
+                    return GameCommand();
                 case "apple":
                     return AppleCommand();
                 case "supervise":
@@ -280,6 +283,15 @@ ayrctl ui-preview [folder]           render the windows to PNG files";
             }
             _output.WriteLine("Exit the tray, then delete this folder: {0}", AppPaths.ExecutableDirectory);
             return ExitCode.Success;
+        }
+
+        private ExitCode GameCommand()
+        {
+            string subcommand = Argument(1);
+            var games = new GameCommands(_output);
+            return GameCommands.NeedsElevation(subcommand)
+                ? WithElevation(() => games.Execute(subcommand, _args))
+                : games.Execute(subcommand, _args);
         }
 
         private ExitCode AppleCommand()
