@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Game mode also finds GOG and Ubisoft Connect games.
+- A launcher's damaged record no longer hides the other games it lists.
+- `ayrctl game add` and `remove` take one path; quote it if it has spaces.
+
 ## 0.3.0 (2026-11-01)
 
 - **Game mode:** while one of your games runs, Ayr switches to Turbo with your GPU overclock and Cooler Boost, and puts

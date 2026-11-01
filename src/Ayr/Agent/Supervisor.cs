@@ -241,7 +241,7 @@ namespace Ayr.Agent
                 {
                     _games = new GameWatcher();
                 }
-                string game = _games?.ActiveGame;
+                string game = _games?.RunningGame();
                 if (game == _activeGame)
                 {
                     return;

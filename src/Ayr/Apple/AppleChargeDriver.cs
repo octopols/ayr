@@ -42,14 +42,14 @@ namespace Ayr.Apple
             // Two senders could put requests seconds apart, the burst that hung Windows.
             if (MsiSoftware.IsSuperChargerRunning)
             {
-                refusal = "MSI Super Charger's own service is running and sends its own requests; uninstall Super Charger";
+                refusal = "MSI Super Charger's own service is running and sends its own requests. Uninstall Super Charger.";
                 return false;
             }
             using (var mutex = new Mutex(false, RequestMutexName))
             {
                 if (!TryAcquire(mutex))
                 {
-                    refusal = "another request is being sent right now";
+                    refusal = "Another request is being sent right now.";
                     return false;
                 }
                 try
@@ -57,7 +57,7 @@ namespace Ayr.Apple
                     TimeSpan sinceLast = DateTime.Now - (log.LastRequest ?? DateTime.MinValue);
                     if (sinceLast < MinimumGap)
                     {
-                        refusal = string.Format("last request was {0:0} s ago (minimum gap {1:0} min, like Super Charger)",
+                        refusal = string.Format("The last request was {0:0} s ago; only one is sent every {1:0} minutes, like Super Charger.",
                             sinceLast.TotalSeconds, MinimumGap.TotalMinutes);
                         return false;
                     }

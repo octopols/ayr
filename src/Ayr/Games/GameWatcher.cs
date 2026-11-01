@@ -29,16 +29,13 @@ namespace Ayr.Games
             ReloadIfChanged();
         }
 
-        /// <summary>The name of a running game, or null when none is running.</summary>
-        public string ActiveGame
+        /// <summary>The name of a running game, or null when none is running. Picks up changes to the game list first.</summary>
+        public string RunningGame()
         {
-            get
+            ReloadIfChanged();
+            lock (_sync)
             {
-                ReloadIfChanged();
-                lock (_sync)
-                {
-                    return _running.Values.Select(game => game.Name).FirstOrDefault();
-                }
+                return _running.Values.Select(game => game.Name).FirstOrDefault();
             }
         }
 

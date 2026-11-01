@@ -69,7 +69,7 @@ namespace Ayr.Apple
             }
             if (!Driver.TrySend(_requests, reachable.Select(status => status.Device.InstanceId), out string refusal))
             {
-                return ChargeRequestResult.NotSent(Capitalize(refusal) + ".");
+                return ChargeRequestResult.NotSent(refusal);
             }
             string names = string.Join(", ", reachable.Select(status => status.Device.Model + " " + status.Device.Serial));
             ActivityLog.Write("apple charge request sent for " + names);
@@ -99,7 +99,5 @@ namespace Ayr.Apple
             }
             return now < nextAllowed ? FastChargeState.WaitingForGap : FastChargeState.Ready;
         }
-
-        private static string Capitalize(string text) => char.ToUpperInvariant(text[0]) + text.Substring(1);
     }
 }

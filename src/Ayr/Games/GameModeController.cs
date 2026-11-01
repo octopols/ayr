@@ -76,11 +76,7 @@ namespace Ayr.Games
             ActivityLog.Write("game removed: " + game.Name);
         }
 
-        public GameEntry FindAdded(string path)
-        {
-            var wanted = new GameEntry("", path);
-            return _library.Load().FirstOrDefault(wanted.SamePathAs);
-        }
+        public GameEntry FindAdded(string path) => _library.Find(path);
 
         /// <summary>Looks for games again now rather than when the cached list expires; returns how many were found.</summary>
         public int ScanAgain()

@@ -13,8 +13,10 @@ namespace Ayr.Cli
         public const string Usage =
 @"ayrctl game                          Game mode on/off, your games, which are running, games found on this PC
 ayrctl game on|off                   Turbo, GPU overclock and Cooler Boost while one of your games runs
-ayrctl game add <folder or .exe>     add a game (an install folder covers every program the game starts)
-ayrctl game remove <folder or .exe>  remove a game";
+ayrctl game add ""<folder or .exe>""   add a game (an install folder covers every program the game starts)
+ayrctl game remove ""<folder or .exe>""  remove a game";
+
+        private const int PathArgumentIndex = 2;
 
         private readonly TextWriter _output;
         private readonly GameModeController _games = new GameModeController();
@@ -29,7 +31,7 @@ ayrctl game remove <folder or .exe>  remove a game";
         /// <param name="args">The full command line, with paths in their original case.</param>
         public ExitCode Execute(string subcommand, IReadOnlyList<string> args)
         {
-            string path = args.Count > 2 ? string.Join(" ", args.Skip(2)) : null;
+            string path = args.Count == PathArgumentIndex + 1 ? args[PathArgumentIndex] : null;
             switch (subcommand)
             {
                 case null:

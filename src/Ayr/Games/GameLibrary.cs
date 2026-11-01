@@ -16,9 +16,17 @@ namespace Ayr.Games
 
         public List<GameEntry> Load() =>
             _file.Read()
-                .Select(entry => new GameEntry(entry.Value, entry.Key))
+                .Select(entry => GameEntry.TryCreate(entry.Value, entry.Key))
+                .Where(game => game != null)
                 .OrderBy(game => game.Name, StringComparer.CurrentCultureIgnoreCase)
                 .ToList();
+
+        /// <summary>The added game at this path, or null.</summary>
+        public GameEntry Find(string path)
+        {
+            string normalized = GameEntry.NormalizePath(path);
+            return Load().FirstOrDefault(game => string.Equals(game.Path, normalized, StringComparison.OrdinalIgnoreCase));
+        }
 
         public void Add(GameEntry game)
         {

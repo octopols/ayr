@@ -14,7 +14,7 @@ namespace Ayr.Games
         public GameEntry(string name, string path)
         {
             Name = name;
-            Path = System.IO.Path.GetFullPath(path).TrimEnd(System.IO.Path.DirectorySeparatorChar);
+            Path = NormalizePath(path);
         }
 
         public string Name { get; }
@@ -25,6 +25,26 @@ namespace Ayr.Games
         public bool IsInstalled => IsExecutable ? File.Exists(Path) : Directory.Exists(Path);
 
         private bool IsExecutable => Path.EndsWith(ExecutableExtension, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Null when the record has no name or no usable path, as in a launcher's damaged record.</summary>
+        public static GameEntry TryCreate(string name, string path)
+        {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(path))
+            {
+                return null;
+            }
+            try
+            {
+                return new GameEntry(name.Trim(), path);
+            }
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException || ex is PathTooLongException)
+            {
+                return null;
+            }
+        }
+
+        public static string NormalizePath(string path) =>
+            System.IO.Path.GetFullPath(path).TrimEnd(System.IO.Path.DirectorySeparatorChar);
 
         public bool Matches(string processPath) => IsExecutable
             ? string.Equals(processPath, Path, StringComparison.OrdinalIgnoreCase)

@@ -1,6 +1,6 @@
 using System.Runtime.Serialization;
 
-namespace Ayr.Games
+namespace Ayr.Games.Sources
 {
     /// <summary>The fields Ayr reads from an Epic Games Launcher install manifest (*.item).</summary>
     [DataContract]
