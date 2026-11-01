@@ -317,7 +317,7 @@ namespace Ayr.Ui.Pages
             {
                 return CalibrationText.PlugInCharger;
             }
-            return _confirmingCalibration ? CalibrationText.Confirmation(_chargeLimitAvailable) : CalibrationText.Idle(calibration);
+            return _confirmingCalibration ? CalibrationText.Confirmation(_chargeLimitAvailable) : CalibrationText.LastResultAndExplanation(calibration);
         }
 
         private void OnCalibrateClicked()

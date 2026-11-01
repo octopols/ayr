@@ -32,6 +32,10 @@ namespace Ayr.Battery
 
         public bool CanCalibrate => Percent >= MinimumForCalibration;
 
+        /// <summary>The errors that mean the battery couldn't be read, as opposed to a fault in Ayr.</summary>
+        public static bool IsReadFailure(Exception error) =>
+            error is InvalidOperationException || error is ManagementException || error is ArgumentOutOfRangeException;
+
         public static BatteryHealth Read(WmiBlockClient wmi)
         {
             long designMilliampHours = wmi.ReadNumber(WmiBlock.MasterBattery, DesignCapacityIndex);

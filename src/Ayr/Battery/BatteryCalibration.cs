@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Management;
 using Ayr.App;
 using Ayr.Controllers;
 
@@ -102,7 +101,7 @@ namespace Ayr.Battery
                 battery = BatteryReading.Now();
                 health = BatteryHealth.Read(_hardware.Wmi);
             }
-            catch (Exception ex) when (ex is InvalidOperationException || ex is ManagementException || ex is ArgumentOutOfRangeException)
+            catch (Exception ex) when (BatteryHealth.IsReadFailure(ex))
             {
                 ActivityLog.Write("calibration: reading the battery failed: " + ex.Message);
                 return Refuse(state, "Battery calibration not started: Ayr couldn't read the battery. Try again after restarting the laptop.");

@@ -367,7 +367,6 @@ namespace Ayr.Ui.Pages
                 });
         }
 
-        // Nothing ran, so the rows go back to what they were and the user can try again.
         private void OnRemovalNotStarted(IReadOnlyList<Entry> selected)
         {
             foreach (Entry entry in selected)
@@ -407,7 +406,6 @@ namespace Ayr.Ui.Pages
             }
         }
 
-        // The window enables every input after any change; this puts back what the current stage allows.
         private void EnableForStage()
         {
             bool busy = _stage == Stage.Scanning || _stage == Stage.Removing;

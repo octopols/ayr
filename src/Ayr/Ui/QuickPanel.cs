@@ -27,6 +27,7 @@ namespace Ayr.Ui
         private readonly TitleWithSubtitle _appleTitle;
         private readonly ToggleSwitch _appleToggle;
         private bool _busy;
+        private bool _exitConfirmationShown;
 
         public QuickPanel(UiBackend backend)
         {
@@ -165,13 +166,14 @@ namespace Ayr.Ui
         private void OnExitClicked()
         {
             string interrupted = _backend.WorkAnExitWouldStop();
-            if (interrupted == null || _exit.Text == ExitAnywayLabel)
+            if (interrupted == null || _exitConfirmationShown)
             {
                 CloseThen(ExitRequested);
                 return;
             }
             _status.Text = interrupted + " Exiting Ayr stops it.";
             _exit.Text = ExitAnywayLabel;
+            _exitConfirmationShown = true;
         }
 
         private void CloseThen(Action next)

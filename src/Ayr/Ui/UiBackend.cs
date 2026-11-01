@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Management;
 using System.Threading;
 using System.Windows.Forms;
 using Ayr.Agent;
@@ -312,7 +311,7 @@ namespace Ayr.Ui
             {
                 return BatteryHealth.Read(_hardware.Wmi);
             }
-            catch (Exception ex) when (ex is InvalidOperationException || ex is ManagementException || ex is ArgumentOutOfRangeException)
+            catch (Exception ex) when (BatteryHealth.IsReadFailure(ex))
             {
                 return null;
             }

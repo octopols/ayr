@@ -37,17 +37,17 @@ namespace Ayr.Games
         public int SetEnabled(bool on)
         {
             DesiredState.Update(state => state.GameMode = on);
-            int added = 0;
-            if (on && _library.Load().Count == 0)
-            {
-                foreach (GameEntry game in FoundGames())
-                {
-                    _library.Add(game);
-                    added++;
-                }
-            }
             ActivityLog.Write("game mode " + (on ? "on" : "off"));
-            return added;
+            if (!on || _library.Load().Count > 0)
+            {
+                return 0;
+            }
+            List<GameEntry> found = FoundGames();
+            foreach (GameEntry game in found)
+            {
+                _library.Add(game);
+            }
+            return found.Count;
         }
 
         public void SetProfile(GameProfile profile)

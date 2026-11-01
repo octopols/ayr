@@ -43,8 +43,7 @@ namespace Ayr.Ui
             return Progress(calibration.Step) + Charge(calibration.Battery);
         }
 
-        /// <summary>What happened last time followed by what calibration is, or just the latter before the first run.</summary>
-        public static string Idle(CalibrationView calibration) =>
+        public static string LastResultAndExplanation(CalibrationView calibration) =>
             calibration.LastResult == null ? Explanation : calibration.LastResult + Environment.NewLine + Explanation;
 
         private static string Progress(CalibrationStep step)
