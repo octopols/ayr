@@ -14,9 +14,9 @@ lists them and shows how to check your own laptop safely.
 
 ## Tested devices
 
-| Device | Board | Fan modes | Cooler Boost | Performance | GPU overclock | Apple fast charge | Start with Windows |
-|---|---|:---:|:---:|:---:|:---:|:---:|:---:|
-| MSI GF65 Thin 10SDR | MS-16W1 | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/partial.svg" width="16" alt="Partly tested"> ¹ | <img src="images/status/works.svg" width="16" alt="Works"> |
+| Device | Board | Fan modes | Cooler Boost | Performance | GPU overclock | Charge limit | Keyboard light | Apple fast charge | Start with Windows |
+|---|---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| MSI GF65 Thin 10SDR | MS-16W1 | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/works.svg" width="16" alt="Works"> | <img src="images/status/partial.svg" width="16" alt="Partly tested"> ² | <img src="images/status/partial.svg" width="16" alt="Partly tested"> ¹ | <img src="images/status/works.svg" width="16" alt="Works"> |
 
 <img src="images/status/works.svg" width="12" alt=""> Works &nbsp;
 <img src="images/status/partial.svg" width="12" alt=""> Partly tested &nbsp;
@@ -24,6 +24,7 @@ lists them and shows how to check your own laptop safely.
 <img src="images/status/unsupported.svg" width="12" alt=""> Not supported by Ayr yet
 
 1. The request is sent and the PC stays stable, but nobody has measured yet whether charging gets faster.
+2. Reading the level works; setting it from Ayr hasn't been tried on this laptop yet.
 
 **MSI desktop motherboards** are untested. Fans, Cooler Boost, performance and the GPU overclock are not supported on
 them, because desktop fans are run by a different chip. Apple fast charge doesn't depend on the board and may work.

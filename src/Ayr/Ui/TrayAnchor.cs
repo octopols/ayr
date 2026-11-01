@@ -40,6 +40,13 @@ namespace Ayr.Ui
 
         public static TrayAnchor Capture(Point click) => new TrayAnchor(click);
 
+        /// <summary>For a popup opened from the keyboard: the notification-area corner of the primary screen's taskbar.</summary>
+        public static TrayAnchor ForNotificationArea()
+        {
+            Rectangle screen = Screen.PrimaryScreen.Bounds;
+            return new TrayAnchor(new Point(screen.Right - 1, screen.Bottom - 1));
+        }
+
         public Point Place(Size window, int gap)
         {
             Rectangle work = _screen.WorkingArea;

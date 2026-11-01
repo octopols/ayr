@@ -25,6 +25,8 @@ namespace Ayr.Ui
         private const int ScreenMargin = 40;
         private const int MaxDeviceRows = 3;
         private const int MaxGameRows = 16;
+        private const int FullChargeIndex = 0;
+        private const int CustomChargeIndex = 1;
         private const string MsiCenterWarning = "MSI Center is running and overrides Ayr's settings after sleep. Uninstall MSI Center.";
         private const string CheckForUpdatesLabel = "Check for updates";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
@@ -45,6 +47,12 @@ namespace Ayr.Ui
         private readonly MetricCell _cpuTemperature, _gpuTemperature, _cpuFan, _gpuFan;
         private readonly TitleWithSubtitle _fanTitle;
         private readonly Segmented _fan;
+        private readonly Card _curveCard;
+        private readonly TitleWithSubtitle _curveTitle;
+        private readonly Segmented _curveFan;
+        private readonly FanCurveEditor _curveEditor;
+        private readonly MutedText _curveNote;
+        private readonly FlatButton _resetCurve;
         private readonly MutedText _fanNote;
         private readonly TitleWithSubtitle _performanceTitle;
         private readonly Segmented _performance;
@@ -61,6 +69,14 @@ namespace Ayr.Ui
         private readonly MutedText _gamesFoundLabel;
         private readonly FlatButton _scanGames;
         private readonly FlatButton _addGame;
+        private readonly TitleWithSubtitle _laptopTitle;
+        private readonly Card _laptopCard;
+        private readonly TitleWithSubtitle _chargeRow;
+        private readonly Segmented _charge;
+        private readonly LabeledSlider _chargeSlider;
+        private readonly Panel _laptopDivider;
+        private readonly TitleWithSubtitle _lightRow;
+        private readonly Segmented _light;
         private readonly TitleWithSubtitle _appleTitle;
         private readonly Card _appleCard;
         private readonly TitleWithSubtitle _appleAutomaticRow;
@@ -88,6 +104,14 @@ namespace Ayr.Ui
         private List<GameEntry> _shownFoundGames = new List<GameEntry>();
         private ReleaseInfo _availableUpdate;
         private bool _updateInFlight;
+        private FanCurves _customCurves = FanCurves.Stock;
+        private CurveTemperatures _curveTemperatures;
+        private FanKind _editedFan = FanKind.Cpu;
+        private bool _curveShown;
+        private bool _chargeShown;
+        private bool _chargeCustom;
+        private int? _shownChargePercent;
+        private bool _lightShown;
 
         public MainWindow(UiBackend backend)
         {
@@ -114,9 +138,33 @@ namespace Ayr.Ui
             _metrics = new[] { _cpuTemperature, _gpuTemperature, _cpuFan, _gpuFan };
 
             _fanTitle = AddToPage(Section("Fan"));
-            _fan = AddToPage(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToArray(), columns: 4));
+            _fan = AddToPage(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToArray(), columns: FanController.SelectableModes.Count));
             _fan.Picked += index => Apply(() => _backend.ApplyFan(FanController.SelectableModes[index]));
             _fanNote = AddToPage(new MutedText(Theme, "Silent switches back to Auto at 90°C.", Theme.Background));
+
+            _curveCard = AddToPage(new Card(Theme));
+            _curveTitle = AddTo(_curveCard, new TitleWithSubtitle(Theme, "Custom curve", "Drag a point. It applies when you let go.", Theme.BodyBold, Theme.Surface));
+            _curveFan = AddTo(_curveCard, new Segmented(Theme, new[] { "CPU fan", "GPU fan" }, columns: 2) { SelectedIndex = 0 });
+            _curveFan.Picked += index =>
+            {
+                _editedFan = index == 0 ? FanKind.Cpu : FanKind.Gpu;
+                _curveFan.SelectedIndex = index;
+                ShowCurve();
+            };
+            _curveEditor = AddTo(_curveCard, new FanCurveEditor(Theme));
+            _curveEditor.PointDragged += (point, duty) =>
+            {
+                _customCurves = _customCurves.With(_editedFan, point, duty);
+                ShowCurve();
+            };
+            _curveEditor.DragFinished += () =>
+            {
+                FanCurves edited = _customCurves;
+                Apply(() => _backend.ApplyCustomCurves(edited));
+            };
+            _curveNote = AddTo(_curveCard, new MutedText(Theme, "Dashed line: Auto. The hottest points never go below it.", Theme.Surface));
+            _resetCurve = AddTo(_curveCard, new FlatButton(Theme, "Reset", ButtonStyle.Secondary) { BackColor = Theme.Surface });
+            _resetCurve.Click += (sender, e) => Apply(() => _backend.ApplyCustomCurves(FanCurves.Stock));
 
             _performanceTitle = AddToPage(Section("Performance"));
             _performance = AddToPage(new Segmented(Theme, PerformanceController.SelectableLevels.Select(level => level.ToString()).ToArray(), columns: 4));
@@ -153,6 +201,25 @@ namespace Ayr.Ui
             _scanGames.Click += (sender, e) => Apply(_backend.ScanForGames);
             _addGame = AddTo(_gameCard, new FlatButton(Theme, "Add another game…", ButtonStyle.Secondary) { BackColor = Theme.Surface });
             _addGame.Click += (sender, e) => BrowseForGame();
+
+            _laptopTitle = AddToPage(Section("Battery and keyboard"));
+            _laptopCard = AddToPage(new Card(Theme));
+            _chargeRow = AddTo(_laptopCard, new TitleWithSubtitle(Theme, "Charge limit", "Stopping early helps the battery last if you're mostly plugged in", Theme.BodyBold, Theme.Surface));
+            _charge = AddTo(_laptopCard, new Segmented(Theme, new[] { "Full", "Custom" }, columns: 2));
+            _charge.Picked += index =>
+            {
+                int percent = index == FullChargeIndex ? ChargeLimitController.Full : _chargeSlider.Value;
+                Apply(() => _backend.ApplyChargeLimit(percent));
+            };
+            _chargeSlider = AddTo(_laptopCard, new LabeledSlider(Theme, "Stop charging at", ChargeLimitController.MinimumCustom, ChargeLimitController.MaximumCustom, Percent)
+            {
+                Value = ChargeLimitController.DefaultCustom
+            });
+            _chargeSlider.ValueCommitted += percent => Apply(() => _backend.ApplyChargeLimit(percent));
+            _laptopDivider = AddTo(_laptopCard, new Panel { BackColor = Theme.Border });
+            _lightRow = AddTo(_laptopCard, new TitleWithSubtitle(Theme, "Keyboard light", "The Fn keys change it too. Fn+F7 opens Ayr.", Theme.BodyBold, Theme.Surface));
+            _light = AddTo(_laptopCard, new Segmented(Theme, KeyboardLightController.LevelNames.ToArray(), columns: KeyboardLightController.LevelNames.Count));
+            _light.Picked += level => Apply(() => _backend.ApplyKeyboardLight(level));
 
             _appleTitle = AddToPage(new TitleWithSubtitle(Theme, "Apple fast charge", "Faster charging for iPhone and iPad", Theme.Section, Theme.Background));
             _appleCard = AddToPage(new Card(Theme));
@@ -256,7 +323,11 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
-            Control[] inputs = { _fan, _performance, _coreOffset, _memoryOffset, _applyOverclock, _gameToggle, _scanGames, _addGame, _appleToggle, _autostartToggle, _autoUpdateToggle };
+            Control[] inputs =
+            {
+                _fan, _curveEditor, _resetCurve, _performance, _coreOffset, _memoryOffset, _applyOverclock, _gameToggle, _scanGames, _addGame,
+                _charge, _chargeSlider, _light, _appleToggle, _autostartToggle, _autoUpdateToggle
+            };
             foreach (Control input in inputs.Concat(_gameRows).Concat(_deviceRows))
             {
                 input.Enabled = !busy;
@@ -365,10 +436,61 @@ namespace Ayr.Ui
             _gpuFan.SetValue(live.Telemetry.GpuFanRpm.ToString("N0") + " RPM");
             _fan.SelectedIndex = FanController.SelectableModes.IndexOf(live.Fan);
             _performance.SelectedIndex = PerformanceController.SelectableLevels.IndexOf(live.Performance);
+            if (live.KeyboardLight.HasValue)
+            {
+                _light.SelectedIndex = live.KeyboardLight.Value;
+            }
+            bool curveShown = live.Fan == FanMode.Custom;
+            bool lightShown = live.KeyboardLight.HasValue;
+            if (curveShown != _curveShown || lightShown != _lightShown)
+            {
+                _curveShown = curveShown;
+                _lightShown = lightShown;
+                Relayout();
+            }
+        }
+
+        private void ShowCurve()
+        {
+            if (_curveTemperatures == null)
+            {
+                return;
+            }
+            IReadOnlyList<byte> stock = FanCurves.Stock.For(_editedFan);
+            IReadOnlyList<byte> minimums = Enumerable.Range(0, stock.Count).Select(point => FanCurves.MinimumDuty(_editedFan, point)).ToList();
+            _curveEditor.SetCurve(_customCurves.For(_editedFan), stock, minimums, _curveTemperatures.For(_editedFan));
+        }
+
+        private static string Percent(int value) => value + "%";
+
+        // The slider shows the battery's own limit when one is set, otherwise the last custom value, ready for Custom.
+        private void ShowChargeLimit(SlowState slow)
+        {
+            bool shown = slow.ChargeLimitPercent.HasValue;
+            bool custom = shown && slow.ChargeLimitPercent.Value != ChargeLimitController.Full;
+            if (shown && slow.ChargeLimitPercent != _shownChargePercent)
+            {
+                _shownChargePercent = slow.ChargeLimitPercent;
+                _charge.SelectedIndex = custom ? CustomChargeIndex : FullChargeIndex;
+                _chargeSlider.Value = custom ? slow.ChargeLimitPercent.Value : slow.Desired.CustomChargePercent;
+            }
+            if (shown != _chargeShown || custom != _chargeCustom)
+            {
+                _chargeShown = shown;
+                _chargeCustom = custom;
+                Relayout();
+            }
         }
 
         private void ShowSlow(SlowState slow)
         {
+            _curveTemperatures = slow.CurveTemperatures;
+            if (!_curveEditor.IsDragging && !_busy)
+            {
+                _customCurves = slow.Desired.CustomCurves;
+            }
+            ShowCurve();
+            ShowChargeLimit(slow);
             if (!_slidersInitialized)
             {
                 // The sliders start at the saved Turbo offsets and are then left to the user.
@@ -506,12 +628,25 @@ namespace Ayr.Ui
             LayoutStatus(left, inner, ref y);
             Stack(_fanTitle, left, inner, Scaled(24), Scaled(6), ref y);
             Stack(_fan, left, inner, Scaled(40), Scaled(6), ref y);
-            Stack(_fanNote, left, inner, Scaled(22), Scaled(16), ref y);
+            Stack(_fanNote, left, inner, Scaled(22), _curveShown ? Scaled(6) : Scaled(16), ref y);
+            _curveCard.Visible = _curveShown;
+            if (_curveShown)
+            {
+                Stack(_curveCard, left, inner, LayoutCurveCard(cardInner), Scaled(20), ref y);
+            }
             Stack(_performanceTitle, left, inner, Scaled(24), Scaled(6), ref y);
             Stack(_performance, left, inner, Scaled(40), Scaled(12), ref y);
             Stack(_overclockCard, left, inner, LayoutOverclockCard(cardInner), Scaled(20), ref y);
             Stack(_gameTitle, left, inner, Scaled(36), Scaled(8), ref y);
             Stack(_gameCard, left, inner, LayoutGameCard(cardInner), Scaled(20), ref y);
+            bool laptopShown = _chargeShown || _lightShown;
+            _laptopTitle.Visible = laptopShown;
+            _laptopCard.Visible = laptopShown;
+            if (laptopShown)
+            {
+                Stack(_laptopTitle, left, inner, Scaled(24), Scaled(6), ref y);
+                Stack(_laptopCard, left, inner, LayoutLaptopCard(cardInner), Scaled(20), ref y);
+            }
             Stack(_appleTitle, left, inner, Scaled(36), Scaled(8), ref y);
             Stack(_appleCard, left, inner, LayoutAppleCard(cardInner), Scaled(20), ref y);
             Stack(_settingsTitle, left, inner, Scaled(24), Scaled(6), ref y);
@@ -545,6 +680,50 @@ namespace Ayr.Ui
             Stack(_memoryOffset, padding, cardInner, Scaled(44), Scaled(12), ref y);
             Stack(_applyOverclock, padding, cardInner, Scaled(36), padding, ref y);
             return y;
+        }
+
+        private int LayoutCurveCard(int cardInner)
+        {
+            int padding = Scaled(CardPadding);
+            int y = padding;
+            Stack(_curveTitle, padding, cardInner, Scaled(38), Scaled(8), ref y);
+            Stack(_curveFan, padding, cardInner, Scaled(32), Scaled(8), ref y);
+            Stack(_curveEditor, padding, cardInner, Scaled(180), Scaled(8), ref y);
+            int buttonWidth = Scaled(90);
+            _curveNote.SetBounds(padding, y, cardInner - buttonWidth - Scaled(8), Scaled(32));
+            _resetCurve.SetBounds(padding + cardInner - buttonWidth, y, buttonWidth, Scaled(32));
+            return y + Scaled(32) + padding;
+        }
+
+        private int LayoutLaptopCard(int cardInner)
+        {
+            int padding = Scaled(CardPadding);
+            int y = padding;
+            _chargeRow.Visible = _chargeShown;
+            _charge.Visible = _chargeShown;
+            _chargeSlider.Visible = _chargeShown && _chargeCustom;
+            _laptopDivider.Visible = _chargeShown && _lightShown;
+            _lightRow.Visible = _lightShown;
+            _light.Visible = _lightShown;
+            if (_chargeShown)
+            {
+                Stack(_chargeRow, padding, cardInner, Scaled(38), Scaled(8), ref y);
+                Stack(_charge, padding, cardInner, Scaled(36), Scaled(12), ref y);
+                if (_chargeCustom)
+                {
+                    Stack(_chargeSlider, padding, cardInner, Scaled(44), Scaled(12), ref y);
+                }
+            }
+            if (_chargeShown && _lightShown)
+            {
+                Stack(_laptopDivider, padding, cardInner, 1, Scaled(12), ref y);
+            }
+            if (_lightShown)
+            {
+                Stack(_lightRow, padding, cardInner, Scaled(38), Scaled(8), ref y);
+                Stack(_light, padding, cardInner, Scaled(36), Scaled(12), ref y);
+            }
+            return y - Scaled(12) + padding;
         }
 
         private int LayoutGameCard(int cardInner)

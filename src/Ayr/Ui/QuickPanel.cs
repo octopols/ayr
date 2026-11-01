@@ -13,7 +13,7 @@ namespace Ayr.Ui
     /// </summary>
     public sealed class QuickPanel : PopupWindow
     {
-        private const int BaseWidth = 280;
+        private const int BaseWidth = 320;
         private const int EdgePadding = 16;
         private static readonly string[] PerformanceLabels = { "Turbo", "High", "Med", "Low" };
 
@@ -44,9 +44,9 @@ namespace Ayr.Ui
 
             AddAt(new MutedText(Theme, "Fan mode", Theme.Background), left, y, inner, Scaled(18));
             y += Scaled(20);
-            _fan = AddAt(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToArray(), columns: 2), left, y, inner, Scaled(70));
+            _fan = AddAt(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToArray(), columns: FanController.SelectableModes.Count), left, y, inner, Scaled(36));
             _fan.Picked += index => Apply(() => _backend.ApplyFan(FanController.SelectableModes[index]));
-            y += Scaled(80);
+            y += Scaled(46);
 
             AddAt(new MutedText(Theme, "Performance", Theme.Background), left, y, inner, Scaled(18));
             y += Scaled(20);

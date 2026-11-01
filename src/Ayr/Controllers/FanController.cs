@@ -6,13 +6,14 @@ using Ayr.Hardware;
 namespace Ayr.Controllers
 {
     /// <summary>
-    /// Fan modes the way MSI Center sets them on v1 firmware: Auto is the stock curve with no mode bits, Max is the
-    /// advanced bit with every curve point at 100%, Silent is the silent bit, and Boost is the EC's Cooler Boost bit.
+    /// Fan modes the way MSI Center sets them on v1 firmware: Auto is the stock curve with no mode bits, Max and Custom
+    /// are the advanced bit with an all-100% or the user's own curve, Silent is the silent bit, and Boost is the EC's
+    /// Cooler Boost bit.
     /// </summary>
     public sealed class FanController
     {
         public static readonly ReadOnlyCollection<FanMode> SelectableModes =
-            Array.AsReadOnly(new[] { FanMode.Auto, FanMode.Max, FanMode.Silent, FanMode.Boost });
+            Array.AsReadOnly(new[] { FanMode.Auto, FanMode.Max, FanMode.Silent, FanMode.Boost, FanMode.Custom });
 
         private const byte FullDuty = 100;
         private static readonly byte[] FullCurve = Enumerable.Repeat(FullDuty, RegisterMap.CurvePointCount).ToArray();
@@ -49,10 +50,16 @@ namespace Ayr.Controllers
             return FanMode.Custom;
         }
 
-        public void Apply(FanMode mode)
+        /// <param name="customCurves">The curves Custom uses; ignored by every other mode.</param>
+        public void Apply(FanMode mode, FanCurves customCurves)
         {
             switch (mode)
             {
+                case FanMode.Custom:
+                    WriteCurves(customCurves.Cpu.ToArray(), customCurves.Gpu.ToArray());
+                    WriteFanModeBits(RegisterMap.FanModeAdvancedBit);
+                    SetCoolerBoost(false);
+                    break;
                 case FanMode.Auto:
                     WriteCurves(RegisterMap.StockCpuCurve, RegisterMap.StockVgaCurve);
                     WriteFanModeBits(0);
@@ -75,8 +82,18 @@ namespace Ayr.Controllers
                     WriteFanModeBits(0);
                     break;
                 default:
-                    throw new ArgumentOutOfRangeException(nameof(mode), mode, "Only auto, max, silent and boost can be applied.");
+                    throw new ArgumentOutOfRangeException(nameof(mode), mode, "Unknown fan mode.");
             }
+        }
+
+        /// <summary>The temperature each curve point starts at, in °C; the first point covers everything below the second.</summary>
+        public int[] ReadPointTemperatures(FanKind fan)
+        {
+            byte[] thresholds = _wmi.ReadBlock(fan == FanKind.Cpu ? WmiBlock.Cpu : WmiBlock.Vga)
+                .Skip(RegisterMap.ThresholdFirstIndex)
+                .Take(RegisterMap.ThresholdCount)
+                .ToArray();
+            return new[] { 0 }.Concat(thresholds.Select(threshold => (int)threshold)).ToArray();
         }
 
         public byte ReadFanModeByte() => _wmi.ReadByte(WmiBlock.System, RegisterMap.FanModeIndex);

@@ -11,6 +11,7 @@ namespace Ayr.Ui.Controls
         private const float TrackThickness = 4;
         private const float ThumbRadius = 7;
         private const int PageStep = 10;
+        private static readonly Keys[] SteppingKeys = { Keys.Left, Keys.Right, Keys.PageDown, Keys.PageUp, Keys.Home, Keys.End };
 
         private readonly int _minimum;
         private readonly int _maximum;
@@ -27,6 +28,9 @@ namespace Ayr.Ui.Controls
         }
 
         public event Action<int> ValueChanged;
+
+        /// <summary>Raised when the user lets go of the thumb or releases a key: the moment to act on a value.</summary>
+        public event Action<int> ValueCommitted;
 
         public int Value
         {
@@ -97,8 +101,21 @@ namespace Ayr.Ui.Controls
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
-            _dragging = false;
+            if (_dragging)
+            {
+                _dragging = false;
+                ValueCommitted?.Invoke(_value);
+            }
             base.OnMouseUp(e);
+        }
+
+        protected override void OnKeyUp(KeyEventArgs e)
+        {
+            if (Array.IndexOf(SteppingKeys, e.KeyCode) >= 0)
+            {
+                ValueCommitted?.Invoke(_value);
+            }
+            base.OnKeyUp(e);
         }
 
         protected override bool IsInputKey(Keys keyData) => keyData == Keys.Left || keyData == Keys.Right || base.IsInputKey(keyData);

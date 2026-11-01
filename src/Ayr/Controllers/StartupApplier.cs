@@ -38,16 +38,18 @@ namespace Ayr.Controllers
             var report = new List<string> { Handshake() };
             DesiredState desired = DesiredState.Load();
             var modes = new ModeService(_hardware);
-            if (desired.Fan != FanMode.Custom)
-            {
-                modes.ApplyFan(desired.Fan);
-                report.Add("fan " + desired.Fan.ToString().ToLowerInvariant());
-            }
+            modes.ApplyFan(desired.Fan);
+            report.Add("fan " + desired.Fan.ToString().ToLowerInvariant());
             if (desired.Performance != PerformanceLevel.Unknown)
             {
                 modes.ApplyPerformance(desired.Performance);
                 string offsets = desired.Performance == PerformanceLevel.Turbo ? " (" + desired.TurboOffsets + ")" : "";
                 report.Add("performance " + desired.Performance.ToString().ToLowerInvariant() + offsets);
+            }
+            if (desired.ChargeLimitPercent.HasValue)
+            {
+                modes.ApplyChargeLimit(desired.ChargeLimitPercent.Value);
+                report.Add("charge limit " + desired.ChargeLimitPercent.Value + "%");
             }
             ActivityLog.Write("apply: " + string.Join("; ", report));
             return report;
