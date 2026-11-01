@@ -17,6 +17,8 @@ namespace Ayr.Ui.Controls
             BackColor = background;
         }
 
+        public string Title => _title;
+
         public void SetSubtitle(string subtitle)
         {
             if (_subtitle != subtitle)
@@ -29,13 +31,16 @@ namespace Ayr.Ui.Controls
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(BackColor);
-            TextRenderer.DrawText(e.Graphics, _title, _titleFont, Point.Empty, Theme.Text);
             if (string.IsNullOrEmpty(_subtitle))
             {
+                // Alone, the title is centred so it lines up with a switch or button beside it.
+                TextRenderer.DrawText(e.Graphics, _title, _titleFont, ClientRectangle, Theme.Text,
+                    TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
                 return;
             }
+            TextRenderer.DrawText(e.Graphics, _title, _titleFont, Point.Empty, Theme.Text, TextFormatFlags.NoPrefix);
             var subtitleBounds = new Rectangle(0, _titleFont.Height + 1, Width, Theme.Small.Height + 2);
-            TextRenderer.DrawText(e.Graphics, _subtitle, Theme.Small, subtitleBounds, Theme.TextMuted, TextFormatFlags.EndEllipsis);
+            TextRenderer.DrawText(e.Graphics, _subtitle, Theme.Small, subtitleBounds, Theme.TextMuted, TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
     }
 }

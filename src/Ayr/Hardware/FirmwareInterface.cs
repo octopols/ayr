@@ -36,6 +36,24 @@ namespace Ayr.Hardware
             return FirmwareInterfaceState.RestartRequired;
         }
 
+        /// <summary>
+        /// Replaces a registration of MSI's copy with Ayr's identical copy, so deleting MSI's files keeps the classes. The new
+        /// path is read at the next restart; until then Windows keeps the definitions it already loaded.
+        /// </summary>
+        public static void PointAtOwnCopy()
+        {
+            using (RegistryKey wmiAcpi = OpenWmiAcpiKey())
+            {
+                string current = wmiAcpi.GetValue(MofImagePath, null, RegistryValueOptions.DoNotExpandEnvironmentNames) as string;
+                if (current == null || AppPaths.PointsIntoVendorDirectory(current))
+                {
+                    return;
+                }
+                wmiAcpi.SetValue(MofImagePath, VendorLibrary.FirmwareInterface.Locate(), RegistryValueKind.ExpandString);
+                ActivityLog.Write("wmiacpi's MOF image now points at Ayr's copy instead of " + current);
+            }
+        }
+
         /// <summary>Removes the registration if it points at Ayr's own copy.</summary>
         public static bool RemoveIfOwned()
         {

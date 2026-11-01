@@ -5,7 +5,10 @@ using System.Windows.Forms;
 
 namespace Ayr.Ui.Controls
 {
-    /// <summary>Base for the owner-drawn controls: double-buffered and repainted only when their state changes.</summary>
+    /// <summary>
+    /// Base for the owner-drawn controls: double-buffered and repainted only when their state changes. The background is
+    /// left unset so it follows the parent, which keeps rounded corners blending into a card or the page.
+    /// </summary>
     public abstract class ThemedControl : Control
     {
         protected ThemedControl(Theme theme)
@@ -13,7 +16,6 @@ namespace Ayr.Ui.Controls
             Theme = theme;
             SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint
                 | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
-            BackColor = theme.Background;
             ForeColor = theme.Text;
             Font = theme.Body;
         }

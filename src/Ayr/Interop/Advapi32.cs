@@ -10,6 +10,7 @@ namespace Ayr.Interop
         public const uint ServiceAllAccess = 0xF01FF;
         public const uint ServiceKernelDriver = 0x1;
         public const uint ServiceDemandStart = 0x3;
+        public const uint ServiceDisabled = 0x4;
         public const uint ServiceErrorNormal = 0x1;
         public const uint ServiceNoChange = 0xFFFFFFFF;
         public const int ErrorServiceAlreadyRunning = 1056;

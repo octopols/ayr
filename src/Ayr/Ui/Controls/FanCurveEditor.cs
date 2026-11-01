@@ -8,8 +8,8 @@ using System.Windows.Forms;
 namespace Ayr.Ui.Controls
 {
     /// <summary>
-    /// A fan curve as dots on a chart, one per temperature step, dragged up and down. Auto's curve is drawn faintly
-    /// behind it for reference. Each step only moves as far as the caller's limits allow.
+    /// A fan curve as dots on a chart, one per temperature step, dragged up and down. Auto's curve is drawn dashed behind
+    /// it for reference. Each step only moves as far as the caller's limits allow.
     /// </summary>
     public sealed class FanCurveEditor : ThemedControl
     {
@@ -27,7 +27,6 @@ namespace Ayr.Ui.Controls
 
         public FanCurveEditor(Theme theme) : base(theme)
         {
-            BackColor = theme.Surface;
             Cursor = Cursors.Default;
         }
 
@@ -59,8 +58,12 @@ namespace Ayr.Ui.Controls
             }
             Rectangle plot = PlotArea();
             DrawGrid(graphics, plot);
-            DrawLine(graphics, plot, _reference, Theme.Border, dashed: true);
-            DrawLine(graphics, plot, _curve, Theme.Accent, dashed: false);
+            using (Pen auto = CreateAutoLinePen(Theme))
+            using (Pen custom = CreateCustomLinePen(Theme))
+            {
+                DrawLine(graphics, plot, _reference, auto);
+                DrawLine(graphics, plot, _curve, custom);
+            }
             for (int point = 0; point < _curve.Count; point++)
             {
                 DrawStep(graphics, plot, point);
@@ -140,13 +143,14 @@ namespace Ayr.Ui.Controls
             }
         }
 
-        private void DrawLine(Graphics graphics, Rectangle plot, IReadOnlyList<byte> curve, Color color, bool dashed)
+        /// <summary>Shared with the legend so the chart and its legend always match.</summary>
+        public static Pen CreateCustomLinePen(Theme theme) => new Pen(theme.Accent, 2);
+
+        public static Pen CreateAutoLinePen(Theme theme) => new Pen(theme.TextMuted, 1.5f) { DashStyle = DashStyle.Dash };
+
+        private void DrawLine(Graphics graphics, Rectangle plot, IReadOnlyList<byte> curve, Pen pen)
         {
-            if (curve.Count < 2)
-            {
-                return;
-            }
-            using (var pen = new Pen(color, 2) { DashStyle = dashed ? DashStyle.Dash : DashStyle.Solid })
+            if (curve.Count >= 2)
             {
                 graphics.DrawLines(pen, curve.Select((duty, point) => Position(plot, point, duty)).ToArray());
             }

@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.5.0 (2026-11-01)
+
+- **New window:** a fixed-size window with a page for each area: Performance, Game mode, Battery, iPhone & iPad,
+  Keyboard, MSI software and Settings. Nothing scrolls. Temperatures and fan speeds stay in the sidebar.
+- Every performance level and fan mode says in one line what it does. The GPU overclock says it is only added in Turbo,
+  and its button shows whether the sliders are saved.
+- The custom fan curve opens in its own window, with a legend for MSI's Auto curve. A reset can be undone.
+- **Game mode settings:** choose the performance level, fans and GPU overclock used while a game runs. They start at
+  the highest of each, and a change applies at once, even mid-game.
+- **Fn keys:** Fn+F7 and Fn+F12 can open Ayr, step through the performance levels or step through the fan modes.
+  Fn+F7 is left to MSI's app while it is still installed, so one press never opens two apps.
+- **MSI software:** lists MSI's apps, services, drivers, scheduled tasks, startup entries, settings and folders, and
+  removes the ones you choose, with progress on each. Registry keys are backed up first, and a restore point is optional.
+  Drivers are never stopped; Windows removes them at the next restart. A banner points here while MSI software remains.
+- iPhone & iPad: a countdown shows when a just-connected device can be sent the fast-charge request.
+- After each change the sidebar briefly says what it did.
+- The tray menu uses the same words as the window.
+- Switches, buttons, choices and sliders have names and states for screen readers.
+- `ayrctl msi` lists MSI's software; `ayrctl msi remove --yes` removes it.
+
 ## 0.4.0 (2026-11-01)
 
 - **Custom fan curve:** a fifth fan mode. Drag the points of the CPU and GPU curves, labelled with your firmware's

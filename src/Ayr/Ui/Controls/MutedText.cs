@@ -12,11 +12,16 @@ namespace Ayr.Ui.Controls
             BackColor = background;
         }
 
+        /// <summary>Wraps onto further lines from the top instead of cutting off one centred line.</summary>
+        public bool Wraps { get; set; }
+
         protected override void OnPaint(PaintEventArgs e)
         {
             e.Graphics.Clear(BackColor);
-            TextRenderer.DrawText(e.Graphics, Text, Theme.Small, ClientRectangle, Theme.TextMuted,
-                TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextFormatFlags layout = Wraps
+                ? TextFormatFlags.WordBreak
+                : TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis;
+            TextRenderer.DrawText(e.Graphics, Text, Theme.Small, ClientRectangle, Theme.TextMuted, layout | TextFormatFlags.NoPrefix);
         }
 
         protected override void OnTextChanged(EventArgs e)

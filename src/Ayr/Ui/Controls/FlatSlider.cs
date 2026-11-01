@@ -25,12 +25,16 @@ namespace Ayr.Ui.Controls
             _value = minimum;
             TabStop = true;
             Cursor = Cursors.Hand;
+            AccessibleRole = AccessibleRole.Slider;
         }
 
         public event Action<int> ValueChanged;
 
         /// <summary>Raised when the user lets go of the thumb or releases a key: the moment to act on a value.</summary>
         public event Action<int> ValueCommitted;
+
+        protected override AccessibleObject CreateAccessibilityInstance() =>
+            new OwnerDrawnAccessibility(this, value: () => _value.ToString());
 
         public int Value
         {

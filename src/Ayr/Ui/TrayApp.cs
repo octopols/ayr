@@ -93,21 +93,47 @@ namespace Ayr.Ui
             base.ExitThreadCore();
         }
 
-        // Fn+F7 is a convenience: on a laptop whose firmware doesn't raise the event, the tray works without it.
+        // The Fn keys are a convenience: on a laptop whose firmware doesn't raise the event, the tray works without them.
         private FirmwareKeyWatcher WatchFirmwareKeys()
         {
             try
             {
                 var keys = new FirmwareKeyWatcher();
-                keys.OpenAppPressed += () => _uiThread.BeginInvoke((Action)OpenFromKeyboard);
+                keys.Pressed += key => _uiThread.BeginInvoke((Action)(() => OnFnKey(key)));
                 return keys;
             }
             catch (ManagementException ex)
             {
-                ActivityLog.Write("Fn+F7 not available: " + ex.Message);
+                ActivityLog.Write("Fn keys not available: " + ex.Message);
                 return null;
             }
         }
+
+        // The binding is read on each press, so a change on the Keyboard page applies at once without a restart.
+        private void OnFnKey(FnKey key)
+        {
+            switch (FnKeyBindings.Current().ActionFor(key))
+            {
+                case FnKeyAction.OpenAyr:
+                    OpenFromKeyboard();
+                    break;
+                case FnKeyAction.NextPerformance:
+                    RunFromKeyboard(key, _backend.StepPerformance);
+                    break;
+                case FnKeyAction.NextFanMode:
+                    RunFromKeyboard(key, _backend.StepFanMode);
+                    break;
+            }
+        }
+
+        private void RunFromKeyboard(FnKey key, Func<string> change) =>
+            _backend.Run(_uiThread, change, (message, error) =>
+            {
+                if (error != null)
+                {
+                    ActivityLog.Write("Fn+" + key + " failed: " + error.Message);
+                }
+            });
 
         private void OpenFromKeyboard()
         {

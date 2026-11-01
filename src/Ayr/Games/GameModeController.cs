@@ -3,20 +3,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Ayr.App;
-using Ayr.Controllers;
 
 namespace Ayr.Games
 {
     /// <summary>
-    /// Game mode: while one of the user's games runs, the supervisor switches to Turbo (with the saved GPU overclock) and
-    /// Cooler Boost, and puts the everyday settings back once the last game closes. This class manages the setting and the
-    /// game list; the switching itself happens in the supervisor.
+    /// Game mode: while one of the user's games runs, the supervisor switches to the game profile (Turbo, overclock and
+    /// Cooler Boost unless the user chose otherwise), and puts the everyday settings back once the last game closes. This
+    /// class manages the settings and the game list; the switching itself happens in the supervisor.
     /// </summary>
     public sealed class GameModeController
     {
-        public const FanMode GamingFan = FanMode.Boost;
-        public const PerformanceLevel GamingPerformance = PerformanceLevel.Turbo;
-
         // Finding games walks the game folders on every drive, too slow for each refresh of an open window.
         private static readonly TimeSpan FoundGamesLifetime = TimeSpan.FromMinutes(2);
 
@@ -46,6 +42,12 @@ namespace Ayr.Games
                 }
             }
             ActivityLog.Write("game mode " + (on ? "on" : "off"));
+        }
+
+        public void SetProfile(GameProfile profile)
+        {
+            DesiredState.Update(state => state.GameProfile = profile);
+            ActivityLog.Write("game profile: " + profile);
         }
 
         public void Add(GameEntry game)

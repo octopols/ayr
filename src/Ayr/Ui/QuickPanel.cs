@@ -15,7 +15,6 @@ namespace Ayr.Ui
     {
         private const int BaseWidth = 320;
         private const int EdgePadding = 16;
-        private static readonly string[] PerformanceLabels = { "Turbo", "High", "Med", "Low" };
 
         private readonly UiBackend _backend;
         private readonly MutedText _status;
@@ -42,22 +41,22 @@ namespace Ayr.Ui
             _status = AddAt(new MutedText(Theme, "Reading…", Theme.Background), left, y, inner, Scaled(18));
             y += Scaled(28);
 
-            AddAt(new MutedText(Theme, "Fan mode", Theme.Background), left, y, inner, Scaled(18));
+            AddAt(new MutedText(Theme, "Fans", Theme.Background), left, y, inner, Scaled(18));
             y += Scaled(20);
-            _fan = AddAt(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToArray(), columns: FanController.SelectableModes.Count), left, y, inner, Scaled(36));
+            _fan = AddAt(new Segmented(Theme, FanController.SelectableModes.Select(mode => mode.ToString()).ToList()), left, y, inner, Scaled(36));
             _fan.Picked += index => Apply(() => _backend.ApplyFan(FanController.SelectableModes[index]));
             y += Scaled(46);
 
             AddAt(new MutedText(Theme, "Performance", Theme.Background), left, y, inner, Scaled(18));
             y += Scaled(20);
-            _performance = AddAt(new Segmented(Theme, PerformanceLabels, columns: 4), left, y, inner, Scaled(36));
+            _performance = AddAt(new Segmented(Theme, PerformanceController.SelectableLevels.Select(level => level.ToString()).ToList()), left, y, inner, Scaled(36));
             _performance.Picked += index => Apply(() => _backend.ApplyPerformance(PerformanceController.SelectableLevels[index]));
             y += Scaled(46);
 
             var appleCard = AddAt(new Card(Theme), left, y, inner, Scaled(56));
-            _appleTitle = new TitleWithSubtitle(Theme, "Auto fast charge", "", Theme.BodyBold, Theme.Surface);
+            _appleTitle = new TitleWithSubtitle(Theme, "iPhone & iPad fast charge", "", Theme.BodyBold, Theme.Surface);
             _appleTitle.SetBounds(Scaled(12), Scaled(10), inner - Scaled(70), Scaled(38));
-            _appleToggle = new ToggleSwitch(Theme) { BackColor = Theme.Surface };
+            _appleToggle = new ToggleSwitch(Theme) { BackColor = Theme.Surface, AccessibleName = "iPhone & iPad fast charge" };
             _appleToggle.SetBounds(inner - Scaled(52), Scaled(17), Scaled(40), Scaled(22));
             _appleToggle.Toggled += on => Apply(() => _backend.SetAppleAutoFastCharge(on));
             appleCard.Controls.Add(_appleTitle);
@@ -118,7 +117,7 @@ namespace Ayr.Ui
             {
                 if (error != null)
                 {
-                    _status.Text = "Could not read hardware";
+                    _status.Text = "Couldn't read the hardware";
                     return;
                 }
                 _fan.SelectedIndex = FanController.SelectableModes.IndexOf(live.Fan);
@@ -146,7 +145,7 @@ namespace Ayr.Ui
             _backend.Run(this, change, (message, error) =>
             {
                 _busy = false;
-                _status.Text = error == null ? message : "Failed: " + error.Message;
+                _status.Text = error == null ? message : "Couldn't apply: " + error.Message;
                 Reload();
             });
         }

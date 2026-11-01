@@ -15,6 +15,7 @@ namespace Ayr.Interop
         public const uint PowerThrottlingExecutionSpeed = 0x1;
         public const uint PowerThrottlingCurrentVersion = 1;
         public const uint ProcessQueryLimitedInformation = 0x1000;
+        public const uint MoveFileDelayUntilReboot = 0x4;
 
         [StructLayout(LayoutKind.Sequential)]
         public struct PowerThrottlingState
@@ -66,5 +67,9 @@ namespace Ayr.Interop
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool QueryFullProcessImageName(SafeProcessHandle process, uint flags, StringBuilder path, ref int size);
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool MoveFileEx(string existingPath, string newPath, uint flags);
     }
 }

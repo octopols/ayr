@@ -49,6 +49,23 @@ namespace Ayr.Hardware
         }
 
         /// <summary>
+        /// Points an existing service entry at Ayr's copy of the driver, without stopping it, so deleting MSI's copy cannot
+        /// leave the entry pointing at a missing file after the next restart. A missing entry is left for EnsureRunning.
+        /// </summary>
+        public void PointAtOwnCopy()
+        {
+            if (!IsRegistered || ImagePathIsOurs())
+            {
+                return;
+            }
+            using (ServiceControlHandle manager = OpenServiceManager())
+            using (OpenOrCreateService(manager, _file.Locate()))
+            {
+                ActivityLog.Write(ServiceName + " service now points at Ayr's copy of the driver");
+            }
+        }
+
+        /// <summary>
         /// Removes the service if it points at Ayr's own copy of the driver. The driver stays loaded until the next restart
         /// rather than being stopped while in use.
         /// </summary>
@@ -137,9 +154,22 @@ namespace Ayr.Hardware
             return manager;
         }
 
+        private string ServiceKeyPath => @"SYSTEM\CurrentControlSet\Services\" + ServiceName;
+
+        private bool IsRegistered
+        {
+            get
+            {
+                using (RegistryKey key = Registry.LocalMachine.OpenSubKey(ServiceKeyPath))
+                {
+                    return key != null;
+                }
+            }
+        }
+
         private bool ImagePathIsOurs()
         {
-            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(@"SYSTEM\CurrentControlSet\Services\" + ServiceName))
+            using (RegistryKey key = Registry.LocalMachine.OpenSubKey(ServiceKeyPath))
             {
                 return AppPaths.PointsIntoVendorDirectory(key?.GetValue("ImagePath") as string);
             }
