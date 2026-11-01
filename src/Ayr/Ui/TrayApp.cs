@@ -242,7 +242,7 @@ namespace Ayr.Ui
             {
                 string text = error != null
                     ? AppName
-                    : AppName + "\nFan " + live.Fan + " · " + live.Performance
+                    : AppName + "\nFans " + live.Fan + " · " + live.Performance + " performance"
                         + "\nCPU " + live.Telemetry.CpuTemperature + "°C · GPU " + live.Telemetry.GpuTemperature + "°C";
                 _notifyIcon.Text = text.Length > TooltipLimit ? text.Substring(0, TooltipLimit) : text;
             });

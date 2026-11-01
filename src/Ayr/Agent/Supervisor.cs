@@ -4,6 +4,7 @@ using System.Threading;
 using Microsoft.Win32;
 using Ayr.App;
 using Ayr.Apple;
+using Ayr.Battery;
 using Ayr.Controllers;
 using Ayr.Games;
 using Ayr.Hardware;
@@ -17,7 +18,9 @@ namespace Ayr.Agent
     ///  - Resume from sleep: the saved fan mode and performance level reapplied.
     ///  - Automatic Apple fast charge: one request for each Apple device per connection.
     ///  - Game mode: the game profile while one of the user's games runs, the everyday settings again once it closes.
-    /// It never "corrects" a mode changed elsewhere. A sentinel process forces Auto if this one dies while Silent.
+    ///  - Battery calibration: each step in turn, and everything put back when it ends, is cancelled or this loop exits.
+    /// It never "corrects" a mode changed elsewhere. A sentinel process forces Auto if this one dies while Silent, and
+    /// ends a calibration so the laptop isn't left running on its battery.
     /// </summary>
     public sealed class Supervisor : IDisposable
     {
@@ -37,6 +40,7 @@ namespace Ayr.Agent
         private readonly bool _stayAliveWhenIdle;
         private readonly Action<string> _notify;
         private readonly AppleArrivalWatcher _appleWatcher = new AppleArrivalWatcher(new AppleChargeController());
+        private readonly BatteryCalibration _calibration;
         private readonly ManualResetEvent _stop = new ManualResetEvent(false);
         private Process _sentinel;
         private int _readFailures;
@@ -50,6 +54,7 @@ namespace Ayr.Agent
         {
             _hardware = hardware;
             _modes = new ModeService(hardware);
+            _calibration = new BatteryCalibration(hardware);
             _stayAliveWhenIdle = stayAliveWhenIdle;
             _notify = notify;
         }
@@ -111,6 +116,7 @@ namespace Ayr.Agent
             try
             {
                 EnsureSentinel();
+                NotifyIfEnded(_calibration.RecoverAfterRestart());
                 for (int tick = 0; !_stop.WaitOne(Tick); tick++)
                 {
                     EnsureSentinel();
@@ -125,6 +131,7 @@ namespace Ayr.Agent
                         ReapplyAfterResume(desired);
                     }
                     TrackGames(desired);
+                    TrackCalibration(desired);
                     GuardSilent(desired);
                     if (desired.AppleAutoFastCharge)
                     {
@@ -148,6 +155,7 @@ namespace Ayr.Agent
             {
                 SystemEvents.PowerModeChanged -= OnPowerModeChanged;
                 StopWatchingGames();
+                StopCalibration();
                 if (SafeReadMode() == FanMode.Silent)
                 {
                     SafeFailsafe("supervisor exiting while Silent");
@@ -304,6 +312,40 @@ namespace Ayr.Agent
             }
         }
 
+        // A calibration failure ends the calibration, never the thermal guard.
+        private void TrackCalibration(DesiredState desired)
+        {
+            try
+            {
+                NotifyIfEnded(_calibration.Advance(desired.CalibrationWanted));
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("calibration failed: " + ex);
+                NotifyIfEnded(_calibration.Abandon("Battery calibration stopped: " + ExceptionText.Of(ex)));
+            }
+        }
+
+        private void StopCalibration()
+        {
+            try
+            {
+                _calibration.Abandon("Battery calibration stopped because Ayr closed.");
+            }
+            catch (Exception ex)
+            {
+                ActivityLog.Write("ending the calibration on exit failed: " + ex.Message);
+            }
+        }
+
+        private void NotifyIfEnded(string message)
+        {
+            if (message != null)
+            {
+                Notify(message);
+            }
+        }
+
         private void DisposeGameWatcher()
         {
             _games?.Dispose();
@@ -324,7 +366,8 @@ namespace Ayr.Agent
                 {
                     ApplyEveryday(desired);
                 }
-                if (desired.ChargeLimitPercent.HasValue)
+                // A calibration holds the limit at full until it ends, and then puts the user's limit back itself.
+                if (desired.ChargeLimitPercent.HasValue && !BatteryCalibration.IsRunning)
                 {
                     _hardware.ChargeLimit.Apply(desired.ChargeLimitPercent.Value);
                 }

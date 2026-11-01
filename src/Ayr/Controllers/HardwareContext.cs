@@ -13,6 +13,7 @@ namespace Ayr.Controllers
             Telemetry = new Telemetry(Wmi);
             ChargeLimit = new ChargeLimitController(Ec);
             KeyboardLight = new KeyboardLightController(Ec);
+            Charger = new ChargerSwitch(Wmi);
         }
 
         public WmiBlockClient Wmi { get; }
@@ -22,5 +23,6 @@ namespace Ayr.Controllers
         public Telemetry Telemetry { get; }
         public ChargeLimitController ChargeLimit { get; }
         public KeyboardLightController KeyboardLight { get; }
+        public ChargerSwitch Charger { get; }
     }
 }

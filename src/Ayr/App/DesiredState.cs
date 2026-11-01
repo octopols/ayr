@@ -28,6 +28,7 @@ namespace Ayr.App
         private const string ChargeLimitKey = "charge_limit";
         private const string CustomChargeLimitKey = "custom_charge_limit";
         private const string FnKeyPrefix = "fn_";
+        private const string CalibrationKey = "calibration";
         private const string On = "on";
         private const string Off = "off";
 
@@ -44,6 +45,9 @@ namespace Ayr.App
         public bool GameMode { get; set; }
         public GameProfile GameProfile { get; set; } = GameProfile.Highest;
 
+        /// <summary>True from the user starting a battery calibration until it ends or they cancel it.</summary>
+        public bool CalibrationWanted { get; set; }
+
         /// <summary>Null until the user picks one; Ayr then leaves the battery's own setting alone.</summary>
         public int? ChargeLimitPercent { get; set; }
 
@@ -55,7 +59,7 @@ namespace Ayr.App
 
         public void ChooseFnAction(FnKey key, FnKeyAction action) => _fnActions[key] = action;
 
-        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleAutoFastCharge || GameMode;
+        public bool NeedsSupervision => Fan == FanMode.Silent || Performance == PerformanceLevel.Turbo || AppleAutoFastCharge || GameMode || CalibrationWanted;
 
         public static DesiredState Load()
         {
@@ -84,6 +88,7 @@ namespace Ayr.App
             state.AutoUpdate = !values.TryGetValue(AutoUpdateKey, out string update) || update != Off;
             state.GameMode = values.TryGetValue(GameModeKey, out string gameMode) && gameMode == On;
             state.GameProfile = LoadGameProfile(values);
+            state.CalibrationWanted = values.TryGetValue(CalibrationKey, out string calibration) && calibration == On;
             if (values.TryGetValue(CustomCpuCurveKey, out string cpuText) && FanCurves.TryParse(cpuText, out byte[] cpu)
                 && values.TryGetValue(CustomGpuCurveKey, out string gpuText) && FanCurves.TryParse(gpuText, out byte[] gpu))
             {
@@ -127,7 +132,8 @@ namespace Ayr.App
                 [GameModeKey] = GameMode ? On : Off,
                 [GameFanKey] = GameProfile.Fan.ToString().ToLowerInvariant(),
                 [GamePerformanceKey] = GameProfile.Performance.ToString().ToLowerInvariant(),
-                [GameOverclockKey] = GameProfile.Overclock ? On : Off
+                [GameOverclockKey] = GameProfile.Overclock ? On : Off,
+                [CalibrationKey] = CalibrationWanted ? On : Off
             };
             if (ChargeLimitPercent.HasValue)
             {

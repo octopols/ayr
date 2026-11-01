@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Management;
 using System.Threading;
 using System.Windows.Forms;
 using Ayr.Agent;
 using Ayr.App;
 using Ayr.Apple;
+using Ayr.Battery;
 using Ayr.Controllers;
 using Ayr.Games;
 using Ayr.Hardware;
@@ -30,11 +32,13 @@ namespace Ayr.Ui
         private readonly object _oneCallAtATime = new object();
         private readonly object _oneUpdateAtATime = new object();
         private readonly object _oneMsiTaskAtATime = new object();
+        private readonly Lazy<bool> _calibrationAvailable;
 
         public UiBackend(HardwareContext hardware)
         {
             _hardware = hardware;
             _modes = new ModeService(hardware);
+            _calibrationAvailable = new Lazy<bool>(() => hardware.Charger.IsAvailable);
         }
 
         public event Action<ModeChange> ModeChanged;
@@ -75,7 +79,9 @@ namespace Ayr.Ui
                 _charger.NextRequestAllowedAt,
                 includeAutostart ? _autostart.IsInstalled : (bool?)null,
                 MsiSoftware.IsMsiCenterRunning,
-                new FnKeyBindings(desired, MsiSoftware.UsesFnF7));
+                new FnKeyBindings(desired, MsiSoftware.UsesFnF7),
+                ReadBatteryHealth(),
+                _calibrationAvailable.Value ? new CalibrationView(desired.CalibrationWanted, CalibrationState.Load(), BatteryPercent()) : null);
         }
 
         public AppleSummary ReadAppleSummary() => new AppleSummary(DesiredState.Load().AppleAutoFastCharge, _charger.ConnectedStatuses());
@@ -87,26 +93,30 @@ namespace Ayr.Ui
             {
                 Supervisor.EnsureBackgroundInstance();
             }
-            ModeChanged?.Invoke(new ModeChange(mode + " mode", "Fan profile updated", OsdIcon.Fan));
-            return mode + " mode applied";
+            ModeChanged?.Invoke(new ModeChange(mode.ToString(), "Fans", OsdIcon.Fan));
+            return "Fans set to " + mode;
         }
 
         public string ApplyCustomCurves(FanCurves curves)
         {
             _modes.ApplyCustomCurves(curves);
-            return "Custom curve applied";
+            return "Fans now follow your custom curve";
         }
 
         public string ApplyChargeLimit(int percent)
         {
+            if (BatteryCalibration.InProgress)
+            {
+                throw new InvalidOperationException("The battery calibration holds the charge limit at Full. Cancel it or let it finish first.");
+            }
             _modes.ApplyChargeLimit(percent);
-            return percent == ChargeLimitController.Full ? "Charging to full" : "Charging stops at " + percent + "%";
+            return percent == ChargeLimitController.Full ? "The battery now charges to full" : "Charging now stops at " + percent + "%";
         }
 
         public string ApplyKeyboardLight(int level)
         {
             _modes.ApplyKeyboardLight(level);
-            return "Keyboard light " + KeyboardLightController.LevelNames[level].ToLowerInvariant();
+            return "Keyboard light set to " + KeyboardLightController.LevelNames[level];
         }
 
         public string ApplyPerformance(PerformanceLevel level)
@@ -117,9 +127,10 @@ namespace Ayr.Ui
             {
                 Supervisor.EnsureBackgroundInstance();
             }
-            string detail = turbo ? "GPU " + DesiredState.Load().TurboOffsets : "GPU offsets off";
-            ModeChanged?.Invoke(new ModeChange(level + " performance", detail, OsdIcon.Performance));
-            return level + " performance applied";
+            bool overclocked = turbo && DesiredState.Load().TurboOffsets.RaisesClocks;
+            string area = overclocked ? "Performance, with GPU overclock" : "Performance";
+            ModeChanged?.Invoke(new ModeChange(level.ToString(), area, OsdIcon.Performance));
+            return "Performance set to " + level;
         }
 
         public string StepPerformance() =>
@@ -131,7 +142,7 @@ namespace Ayr.Ui
         {
             DesiredState.Update(state => state.ChooseFnAction(key, action));
             ActivityLog.Write("Fn+" + key + " -> " + action);
-            return "Fn+" + key + " updated";
+            return "Fn+" + key + " now " + FnKeyText.Effect(action);
         }
 
         public string ApplyTurboOffsets(GpuOffsets offsets)
@@ -141,7 +152,7 @@ namespace Ayr.Ui
             {
                 Supervisor.EnsureBackgroundInstance();
             }
-            return applied ? "GPU offsets applied: " + offsets : "GPU offsets saved for the next Turbo session";
+            return applied ? "GPU overclock saved and applied" : "GPU overclock saved. It's added whenever Turbo is on";
         }
 
         public string SetGameMode(bool on)
@@ -152,6 +163,19 @@ namespace Ayr.Ui
                 Supervisor.EnsureBackgroundInstance();
             }
             return on ? "Game mode on" : "Game mode off";
+        }
+
+        public string StartCalibration()
+        {
+            DesiredState.Update(state => state.CalibrationWanted = true);
+            Supervisor.EnsureBackgroundInstance();
+            return "Battery calibration started. Keep the charger plugged in";
+        }
+
+        public string CancelCalibration()
+        {
+            DesiredState.Update(state => state.CalibrationWanted = false);
+            return "Battery calibration cancelled";
         }
 
         public string SetGameProfile(GameProfile profile)
@@ -186,11 +210,11 @@ namespace Ayr.Ui
             _charger.SetAutomatic(on);
             if (!on)
             {
-                return "Automatic fast charge off";
+                return "iPhones and iPads no longer fast charge automatically";
             }
             Supervisor.EnsureBackgroundInstance();
             ChargeRequestResult sentNow = _charger.SendIfAnyReady();
-            return sentNow != null && sentNow.Sent ? sentNow.Message : "Automatic fast charge on";
+            return sentNow != null && sentNow.Sent ? sentNow.Message : "iPhones and iPads now fast charge automatically";
         }
 
         public string SendAppleFastCharge()
@@ -208,10 +232,10 @@ namespace Ayr.Ui
             if (on)
             {
                 _autostart.Install();
-                return "Settings will be applied at login";
+                return "Ayr now starts with Windows";
             }
             _autostart.Remove();
-            return "Login task removed";
+            return "Ayr no longer starts with Windows";
         }
 
         public string SetAutoUpdate(bool on)
@@ -245,6 +269,30 @@ namespace Ayr.Ui
 
         /// <summary>Wraps round to the first; a current value that is not in the list (such as Unknown) also gives the first.</summary>
         private static T NextAfter<T>(ReadOnlyCollection<T> choices, T current) => choices[(choices.IndexOf(current) + 1) % choices.Count];
+
+        private BatteryHealth ReadBatteryHealth()
+        {
+            try
+            {
+                return BatteryHealth.Read(_hardware.Wmi);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException || ex is ManagementException || ex is ArgumentOutOfRangeException)
+            {
+                return null;
+            }
+        }
+
+        private static int? BatteryPercent()
+        {
+            try
+            {
+                return BatteryReading.Now().Percent;
+            }
+            catch (InvalidOperationException)
+            {
+                return null;
+            }
+        }
 
         // Charge limit and keyboard light live only in EC RAM, at addresses known for some firmware only. Where either isn't
         // the case, their controls are simply hidden.

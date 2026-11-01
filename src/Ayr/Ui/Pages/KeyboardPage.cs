@@ -39,7 +39,7 @@ namespace Ayr.Ui.Pages
             foreach (FnKey key in Enum.GetValues(typeof(FnKey)))
             {
                 _keyRows[key] = AddTo(_keysCard, Row("Fn + " + key, null));
-                Segmented choice = AddTo(_keysCard, new Segmented(theme, FnKeyBindings.Choices.Select(Label).ToList()));
+                Segmented choice = AddTo(_keysCard, new Segmented(theme, FnKeyBindings.Choices.Select(FnKeyText.Label).ToList()));
                 choice.Picked += index => host.Apply(() => host.Backend.SetFnKeyAction(key, FnKeyBindings.Choices[index]));
                 _keyChoices[key] = choice;
             }
@@ -69,7 +69,7 @@ namespace Ayr.Ui.Pages
             {
                 FnKeyAction action = slow.FnKeys.ActionFor(key);
                 _keyChoices[key].SelectedIndex = FnKeyBindings.Choices.IndexOf(action);
-                _keyRows[key].SetSubtitle(Explanation(key, action, slow.FnKeys.SharedWithMsi(key)));
+                _keyRows[key].SetSubtitle(MsiConflict(action, slow.FnKeys.SharedWithMsi(key)));
             }
         }
 
@@ -112,30 +112,14 @@ namespace Ayr.Ui.Pages
             choice.SetBounds(x + width - choiceWidth, y + Scale(2), choiceWidth, Scale(34));
         }
 
-        private static string Label(FnKeyAction action)
+        /// <summary>Only a key MSI's app also listens to needs a note; null otherwise.</summary>
+        private static string MsiConflict(FnKeyAction action, bool sharedWithMsi)
         {
-            switch (action)
+            if (!sharedWithMsi)
             {
-                case FnKeyAction.Nothing:
-                    return "Nothing";
-                case FnKeyAction.OpenAyr:
-                    return "Open Ayr";
-                case FnKeyAction.NextPerformance:
-                    return "Performance";
-                case FnKeyAction.NextFanMode:
-                    return "Fan mode";
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(action), action, "Unknown Fn key action.");
+                return null;
             }
-        }
-
-        private static string Explanation(FnKey key, FnKeyAction action, bool sharedWithMsi)
-        {
-            if (sharedWithMsi)
-            {
-                return action == FnKeyAction.Nothing ? "Left to MSI's app, which is still installed" : "MSI's app will react to it too";
-            }
-            return key == FnKey.F7 ? "Opened MSI Dragon Center before" : "Not used by MSI's apps";
+            return action == FnKeyAction.Nothing ? "Left to MSI's app, which is still installed" : "MSI's app will react to it too";
         }
     }
 }

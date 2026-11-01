@@ -32,6 +32,8 @@ namespace Ayr.App
 
         public static string GamesFile => Path.Combine(DataDirectory, "games.ini");
 
+        public static string CalibrationFile => Path.Combine(DataDirectory, "calibration.ini");
+
         public static string SnapshotLog => Path.Combine(DataDirectory, "snapshots.log");
 
         public static string ActivityLog => Path.Combine(DataDirectory, "events.log");

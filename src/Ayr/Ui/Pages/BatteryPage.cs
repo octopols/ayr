@@ -1,70 +1,84 @@
 using System.Collections.Generic;
 using System.Windows.Forms;
+using Ayr.Battery;
 using Ayr.Controllers;
 using Ayr.Ui.Controls;
 
 namespace Ayr.Ui.Pages
 {
     /// <summary>
-    /// The laptop's own battery: charge to full, or stop at a chosen level. Only laptops whose firmware Ayr knows get the
-    /// setting; elsewhere a short note says so.
+    /// The laptop's own battery: how worn it is, where charging stops, and MSI's calibration, which empties and refills it
+    /// once so its percentage is right again. Each appears only on laptops whose firmware offers it; calibration is turned
+    /// down for a battery too worn to carry the laptop through it.
     /// </summary>
     public sealed class BatteryPage : WindowPage
     {
         private const int FullChargeIndex = 0;
         private const int CustomChargeIndex = 1;
+        private const string ChargeLimitHint = "Mostly plugged in? Stopping at 80% slows wear.";
+        private const string HeldAtFullHint = "Held at Full until the calibration ends";
+        private const string CalibrateLabel = "Calibrate";
+        private const string ConfirmLabel = "Start now";
+        private const string CancelLabel = "Cancel";
 
         private readonly TitleWithSubtitle _title;
-        private readonly Card _card;
+        private readonly Card _healthCard;
+        private readonly TitleWithSubtitle _healthRow;
+        private readonly MutedText _healthDetail;
+        private readonly Card _chargeCard;
         private readonly TitleWithSubtitle _chargeRow;
         private readonly Segmented _charge;
         private readonly LabeledSlider _chargeSlider;
         private readonly MutedText _unavailable;
+        private readonly Card _calibrationCard;
+        private readonly TitleWithSubtitle _calibrationRow;
+        private readonly FlatButton _calibrate;
+        private readonly MutedText _calibrationDetail;
 
-        private bool _available = true;
+        private bool _chargeLimitAvailable = true;
         private bool _custom;
         private int? _shownPercent;
+        private BatteryHealth _health;
+        private CalibrationView _calibration;
+        private bool _confirmingCalibration;
 
         public BatteryPage(Theme theme, IPageHost host) : base(theme, host)
         {
-            _title = Add(SectionTitle("Battery", "This laptop's own battery."));
-            _card = Add(new Card(theme));
-            _chargeRow = AddTo(_card, Row("Charge limit", "Mostly plugged in? Stopping at 80% slows wear."));
-            _charge = AddTo(_card, new Segmented(theme, new[] { "Full", "Custom" }));
+            _title = Add(SectionTitle("Battery", null));
+            _healthCard = Add(new Card(theme) { Visible = false });
+            _healthRow = AddTo(_healthCard, Row("Health", null));
+            _healthDetail = AddTo(_healthCard, new MutedText(theme, "", theme.Surface) { Wraps = true });
+            _chargeCard = Add(new Card(theme));
+            _chargeRow = AddTo(_chargeCard, Row("Charge limit", ChargeLimitHint));
+            _charge = AddTo(_chargeCard, new Segmented(theme, new[] { "Full", "Custom" }));
             _charge.Picked += index =>
             {
                 int percent = index == FullChargeIndex ? ChargeLimitController.Full : _chargeSlider.Value;
                 host.Apply(() => host.Backend.ApplyChargeLimit(percent));
             };
-            _chargeSlider = AddTo(_card, new LabeledSlider(theme, "Stop charging at", ChargeLimitController.MinimumCustom, ChargeLimitController.MaximumCustom, Percent)
+            _chargeSlider = AddTo(_chargeCard, new LabeledSlider(theme, "Stop charging at", ChargeLimitController.MinimumCustom, ChargeLimitController.MaximumCustom, Percent)
             {
                 Value = ChargeLimitController.DefaultCustom
             });
             _chargeSlider.ValueCommitted += percent => host.Apply(() => host.Backend.ApplyChargeLimit(percent));
             _unavailable = Add(new MutedText(theme, "Charge limit isn't available for this laptop yet.", theme.Background) { Visible = false });
+
+            _calibrationCard = Add(new Card(theme) { Visible = false });
+            _calibrationRow = AddTo(_calibrationCard, Row("Battery calibration", null));
+            _calibrate = AddTo(_calibrationCard, new FlatButton(theme, CalibrateLabel, ButtonStyle.Secondary));
+            _calibrate.Click += (sender, e) => OnCalibrateClicked();
+            _calibrationDetail = AddTo(_calibrationCard, new MutedText(theme, CalibrationText.Explanation, theme.Surface) { Wraps = true });
         }
 
         public override string Title => "Battery";
 
-        public override IEnumerable<Control> Inputs => new Control[] { _charge, _chargeSlider };
+        public override IEnumerable<Control> Inputs => new Control[] { _charge, _chargeSlider, _calibrate };
 
-        // The slider shows the battery's own limit when one is set, otherwise the last custom value, ready for Custom.
         public override void ShowSlow(SlowState slow)
         {
-            bool available = slow.ChargeLimitPercent.HasValue;
-            bool custom = available && slow.ChargeLimitPercent.Value != ChargeLimitController.Full;
-            if (available && slow.ChargeLimitPercent != _shownPercent)
-            {
-                _shownPercent = slow.ChargeLimitPercent;
-                _charge.SelectedIndex = custom ? CustomChargeIndex : FullChargeIndex;
-                _chargeSlider.Value = custom ? slow.ChargeLimitPercent.Value : slow.Desired.CustomChargePercent;
-            }
-            if (available != _available || custom != _custom)
-            {
-                _available = available;
-                _custom = custom;
-                ContentChanged();
-            }
+            ShowHealth(slow.BatteryHealth);
+            ShowChargeLimit(slow);
+            ShowCalibration(slow.Calibration);
         }
 
         public override void LayoutContent()
@@ -72,28 +86,185 @@ namespace Ayr.Ui.Pages
             int padding = Scale(24);
             int width = Width - 2 * padding;
             int y = padding;
-            Stack(_title, padding, width, Scale(38), Scale(16), ref y);
-            _card.Visible = _available;
-            _unavailable.Visible = !_available;
-            if (!_available)
+            Stack(_title, padding, width, Scale(24), Scale(16), ref y);
+            _healthCard.Visible = _health != null;
+            if (_health != null)
             {
-                Stack(_unavailable, padding, width, Scale(24), 0, ref y);
-                return;
+                Stack(_healthCard, padding, width, LayoutHealthCard(width), Scale(16), ref y);
             }
-            int cardPadding = Scale(CardPadding);
-            int inner = width - 2 * cardPadding;
-            int cardY = cardPadding;
+            _chargeCard.Visible = _chargeLimitAvailable;
+            _unavailable.Visible = !_chargeLimitAvailable;
+            if (_chargeLimitAvailable)
+            {
+                Stack(_chargeCard, padding, width, LayoutChargeCard(width), Scale(16), ref y);
+            }
+            else
+            {
+                Stack(_unavailable, padding, width, Scale(24), Scale(16), ref y);
+            }
+            _calibrationCard.Visible = _calibration != null;
+            if (_calibration != null)
+            {
+                Stack(_calibrationCard, padding, width, LayoutCalibrationCard(width), 0, ref y);
+            }
+        }
+
+        private int LayoutHealthCard(int width)
+        {
+            int padding = Scale(CardPadding);
+            int inner = width - 2 * padding;
+            int y = padding;
+            Stack(_healthRow, padding, inner, Scale(38), Scale(4), ref y);
+            Stack(_healthDetail, padding, inner, Scale(32), 0, ref y);
+            return y + padding;
+        }
+
+        private int LayoutChargeCard(int width)
+        {
+            int padding = Scale(CardPadding);
+            int inner = width - 2 * padding;
             int choiceWidth = Scale(220);
-            _chargeRow.SetBounds(cardPadding, cardY, inner - choiceWidth - Scale(16), Scale(38));
-            _charge.SetBounds(cardPadding + inner - choiceWidth, cardY + Scale(2), choiceWidth, Scale(34));
-            cardY += Scale(38);
+            int y = padding;
+            _chargeRow.SetBounds(padding, y, inner - choiceWidth - Scale(16), Scale(38));
+            _charge.SetBounds(padding + inner - choiceWidth, y + Scale(2), choiceWidth, Scale(34));
+            y += Scale(38);
             _chargeSlider.Visible = _custom;
             if (_custom)
             {
-                cardY += Scale(16);
-                Stack(_chargeSlider, cardPadding, inner, Scale(44), 0, ref cardY);
+                y += Scale(16);
+                Stack(_chargeSlider, padding, inner, Scale(44), 0, ref y);
             }
-            _card.SetBounds(padding, y, width, cardY + cardPadding);
+            return y + padding;
+        }
+
+        private int LayoutCalibrationCard(int width)
+        {
+            int padding = Scale(CardPadding);
+            int inner = width - 2 * padding;
+            int buttonWidth = Scale(110);
+            int y = padding;
+            _calibrationRow.SetBounds(padding, y, inner - buttonWidth - Scale(16), Scale(38));
+            _calibrate.SetBounds(padding + inner - buttonWidth, y + Scale(2), buttonWidth, Scale(34));
+            y += Scale(38) + Scale(10);
+            Stack(_calibrationDetail, padding, inner, Scale(48), 0, ref y);
+            return y + padding;
+        }
+
+        private void ShowChargeLimit(SlowState slow)
+        {
+            bool calibrating = slow.Calibration != null && slow.Calibration.InProgress;
+            _chargeRow.SetSubtitle(calibrating ? HeldAtFullHint : ChargeLimitHint);
+            bool available = slow.ChargeLimitPercent.HasValue;
+            if (available != _chargeLimitAvailable)
+            {
+                _chargeLimitAvailable = available;
+                ContentChanged();
+            }
+            if (available && !calibrating)
+            {
+                ShowChargeChoice(slow.ChargeLimitPercent.Value, slow.Desired.CustomChargePercent);
+            }
+        }
+
+        // The slider shows the battery's own limit when one is set, otherwise the last custom value, ready for Custom.
+        private void ShowChargeChoice(int limit, int lastCustomLimit)
+        {
+            if (limit == _shownPercent)
+            {
+                return;
+            }
+            _shownPercent = limit;
+            bool custom = limit != ChargeLimitController.Full;
+            _charge.SelectedIndex = custom ? CustomChargeIndex : FullChargeIndex;
+            _chargeSlider.Value = custom ? limit : lastCustomLimit;
+            if (custom != _custom)
+            {
+                _custom = custom;
+                ContentChanged();
+            }
+        }
+
+        private void ShowHealth(BatteryHealth health)
+        {
+            bool visibilityChanged = (health == null) != (_health == null);
+            _health = health;
+            if (health != null)
+            {
+                _healthRow.SetSubtitle(BatteryHealthText.Summary(health));
+                _healthDetail.Text = BatteryHealthText.Detail(health);
+            }
+            if (visibilityChanged)
+            {
+                ContentChanged();
+            }
+        }
+
+        private void ShowCalibration(CalibrationView calibration)
+        {
+            bool visibilityChanged = (calibration == null) != (_calibration == null);
+            _calibration = calibration;
+            if (calibration != null)
+            {
+                if (calibration.InProgress)
+                {
+                    _confirmingCalibration = false;
+                }
+                _calibrationRow.SetSubtitle(CalibrationText.Summary(calibration));
+                _calibrate.Text = CalibrateButtonLabel(calibration);
+                _calibrate.Inactive = BatteryTooWornToCalibrate(calibration);
+                _calibrationDetail.Text = CalibrationDetail(calibration);
+            }
+            if (visibilityChanged)
+            {
+                ContentChanged();
+            }
+        }
+
+        private bool BatteryTooWornToCalibrate(CalibrationView calibration) =>
+            !calibration.InProgress && _health != null && !_health.CanCalibrate;
+
+        private string CalibrateButtonLabel(CalibrationView calibration)
+        {
+            if (calibration.InProgress)
+            {
+                return CancelLabel;
+            }
+            return _confirmingCalibration ? ConfirmLabel : CalibrateLabel;
+        }
+
+        private string CalibrationDetail(CalibrationView calibration)
+        {
+            if (BatteryTooWornToCalibrate(calibration))
+            {
+                return BatteryHealthText.CalibrationUnavailable(_health);
+            }
+            if (_confirmingCalibration)
+            {
+                return CalibrationText.Confirmation;
+            }
+            return CalibrationText.LastResult(calibration) ?? CalibrationText.Explanation;
+        }
+
+        private void OnCalibrateClicked()
+        {
+            if (_calibration == null)
+            {
+                return;
+            }
+            if (_calibration.InProgress)
+            {
+                Host.Apply(Host.Backend.CancelCalibration);
+            }
+            else if (_confirmingCalibration)
+            {
+                _confirmingCalibration = false;
+                Host.Apply(Host.Backend.StartCalibration);
+            }
+            else
+            {
+                _confirmingCalibration = true;
+                ShowCalibration(_calibration);
+            }
         }
 
         private static string Percent(int value) => value + "%";

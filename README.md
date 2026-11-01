@@ -10,9 +10,11 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/quick.png" alt="Ayr's tray menu" width="250">
-  &nbsp;&nbsp;
-  <img src="docs/images/main.png" alt="Ayr's main window" width="250">
+  <img src="docs/images/main.png" alt="Ayr's main window">
+</p>
+
+<p align="center">
+  <img src="docs/images/quick.png" alt="Ayr's tray menu">
 </p>
 
 ## Contents
@@ -45,10 +47,11 @@ through the same firmware interfaces, from a 200 KB app:
 | Custom fan curve | Drag the CPU and GPU curves. The hottest points never go below Auto's speed. |
 | Performance | Turbo, High, Medium and Low: MSI's own power profiles. |
 | GPU overclock | Core and memory offsets in Turbo, within MSI's limits, kept across driver resets and sleep. |
-| Game mode | Turbo, GPU overclock and Cooler Boost while one of your games runs, then back to your everyday settings. Finds your games for you. |
+| Game mode | Your choice of performance, fans and GPU overclock while one of your games runs (the highest of each by default), then back to your everyday settings. Finds your games for you. |
 | Charge limit | Full, or stop at 50 to 95% so a mostly plugged-in battery lasts longer. |
 | Keyboard light | Off, Low, Medium or High. |
-| Fn+F7 | Opens Ayr's quick menu, the key that used to open Dragon Center. |
+| Fn keys | Fn+F7 and Fn+F12 can open Ayr or step through performance levels or fan modes. Fn+F7 is left to MSI's app while it's still installed. |
+| MSI software | Lists MSI's apps, services, drivers and leftovers, and removes the ones you choose. Registry keys are backed up first. |
 | Start with Windows | Restores your settings at sign-in. |
 | Apple fast charge | *Experimental.* MSI Super Charger's fast-charge request for iPhone and iPad, automatic or per device. [Details](docs/apple-fast-charge.md) |
 | Updates | Checks GitHub once a day and installs verified updates. Can be turned off. |
@@ -80,7 +83,8 @@ Needs Windows 10 or 11, 64-bit.
    folder next to `Ayr.exe`.
 2. Run `Ayr.exe` and accept the administrator prompt. If MSI's software was never installed on this laptop, Ayr sets up
    MSI's firmware interface and asks for one restart.
-3. Uninstall MSI Center if you have it. It re-applies its own profile after sleep and overrides Ayr.
+3. If MSI Center or Dragon Center is installed, remove it from Ayr's **MSI software** page. It re-applies its own
+   profile after sleep and overrides Ayr.
 
 **Uninstall:** run `ayrctl uninstall`, exit Ayr from the tray menu, then delete the folder.
 
@@ -99,6 +103,7 @@ ayrctl light off|low|medium|high   keyboard light
 ayrctl oc <core> <memory>          Turbo GPU offsets in MHz
 ayrctl game on|off|add|remove      Game mode and your games
 ayrctl apple on|off|send           Apple fast charge
+ayrctl msi [remove --yes]          list or remove MSI's software
 ayrctl help                        all commands
 ```
 
@@ -106,7 +111,7 @@ ayrctl help                        all commands
 
 - Every change is recorded first and rolled back if it fails.
 - Silent is guarded: Auto at 90 °C, or if temperatures can't be read, or if the guard itself stops.
-- Ayr writes only fan, performance and Cooler Boost settings. Never the BIOS, battery or SMBus.
+- Ayr writes only fan, performance, Cooler Boost, charge limit and keyboard light settings. Never the BIOS or SMBus.
 - MSI's files are signature-checked before use.
 
 How it all works: [docs/how-it-works.md](docs/how-it-works.md).
@@ -118,7 +123,7 @@ Ayr loads only MSI's signed drivers, the same ones MSI Center loads. It hasn't b
 it, please report it in an issue.
 
 **Does it replace all of MSI Center?**
-No. Lighting, battery charge limits and display profiles are not included.
+No. RGB lighting, display colour profiles and audio tuning are not included.
 
 **Is it safe on an untested laptop?**
 `ayrctl status` and `ayrctl probe` only read, so they're safe. Changing modes on an untested model is at your own risk.
@@ -141,6 +146,7 @@ src/Ayr
 ├── Agent         background guard
 ├── Games         Game mode: finding games, watching them run
 ├── Apple         Apple fast charge
+├── MsiRemoval    finding and removing MSI's software
 ├── Updates       update check and install
 ├── Cli           ayrctl commands
 └── Ui            tray, windows, controls

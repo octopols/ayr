@@ -18,6 +18,13 @@ namespace Ayr.Hardware
 
         public byte ReadByte(WmiBlock block, int index) => ReadPayload(Instance(block, index));
 
+        /// <summary>The whole value, for blocks such as the battery's that hold numbers larger than a byte.</summary>
+        public int ReadNumber(WmiBlock block, int index)
+        {
+            ManagementObject instance = Instance(block, index);
+            return Convert.ToInt32(instance[PayloadProperty(instance)], CultureInfo.InvariantCulture);
+        }
+
         public void WriteByte(WmiBlock block, int index, byte value)
         {
             if (!block.IsWritable(index))
