@@ -30,6 +30,8 @@ namespace Ayr.Controllers
         public int CoreMhz { get; }
         public int MemoryMhz { get; }
 
+        public bool RaisesClocks => CoreMhz > 0 || MemoryMhz > 0;
+
         public static bool TryParse(string core, string memory, out GpuOffsets offsets, out string error)
         {
             offsets = null;

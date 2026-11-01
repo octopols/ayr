@@ -143,7 +143,7 @@ namespace Ayr.Ui.Pages
         {
             GameEntry playing = slow.Games.Running.FirstOrDefault();
             _toggle.Checked = slow.Desired.GameMode;
-            _automaticRow.SetSubtitle(!slow.Desired.GameMode ? "Off. When on, it starts by itself with your games"
+            _automaticRow.SetSubtitle(!slow.Desired.GameMode ? "Off. Turn it on to switch whenever one of your games starts"
                 : playing != null ? "On now: " + playing.Name
                 : "Waiting for one of your games");
 
@@ -151,8 +151,8 @@ namespace Ayr.Ui.Pages
             _performance.SelectedIndex = GameProfile.PerformanceChoices.IndexOf(profile.Performance);
             _fan.SelectedIndex = GameProfile.FanChoices.IndexOf(profile.Fan);
             _overclock.Checked = profile.Overclock;
-            _overclockRow.SetSubtitle(profile.Performance != PerformanceLevel.Turbo ? "Only added with Turbo"
-                : "Uses your offsets from Performance");
+            _overclockRow.SetSubtitle(profile.Performance != PerformanceLevel.Turbo ? "Only works with Turbo"
+                : "Set on the Performance page");
             bool highestChanged = profile.Equals(GameProfile.Highest) != _profile.Equals(GameProfile.Highest);
             _profile = profile;
             if (highestChanged)

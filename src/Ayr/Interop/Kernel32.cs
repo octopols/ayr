@@ -71,5 +71,8 @@ namespace Ayr.Interop
         [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
         public static extern bool MoveFileEx(string existingPath, string newPath, uint flags);
+
+        [DllImport("kernel32.dll")]
+        public static extern ulong GetTickCount64();
     }
 }

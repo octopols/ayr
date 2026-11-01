@@ -4,7 +4,8 @@ namespace Ayr.Hardware
 {
     /// <summary>
     /// One of the firmware's ACPI-WMI data blocks (class names from msiapcfg.dll's MOF). Battery, device and power blocks
-    /// are read-only here; MSI_Software is writable only at the handshake index, which MSI Foundation Service set at boot.
+    /// are read-only here; MSI_Software is writable only at the handshake index, which MSI Foundation Service set at boot,
+    /// and MSI_AP only at the charger switch that MSI's battery calibration uses.
     /// </summary>
     public sealed class WmiBlock
     {
@@ -16,7 +17,7 @@ namespace Ayr.Hardware
         public static readonly WmiBlock Cpu = new WmiBlock("MSI_CPU", allWritable: true);
         public static readonly WmiBlock Vga = new WmiBlock("MSI_VGA", allWritable: true);
         public static readonly WmiBlock System = new WmiBlock("MSI_System", allWritable: true);
-        public static readonly WmiBlock Ap = new WmiBlock("MSI_AP");
+        public static readonly WmiBlock Ap = new WmiBlock("MSI_AP", writableIndex: ChargerSwitch.Index);
 
         public static readonly IReadOnlyList<WmiBlock> All = new[] { Software, Device, Power, MasterBattery, SlaveBattery, Cpu, Vga, System, Ap };
 
