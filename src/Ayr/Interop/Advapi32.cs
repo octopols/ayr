@@ -18,6 +18,20 @@ namespace Ayr.Interop
         public const uint DaclSecurityInformation = 0x4;
         public const uint ProtectedDaclSecurityInformation = 0x80000000;
         public const uint SddlRevision1 = 1;
+        public const int WmiGuidQuery = 0x1;
+        public const int ErrorSuccess = 0;
+        public const int ErrorInsufficientBuffer = 122;
+        public const int ErrorWmiGuidNotFound = 4200;
+
+        // Windows' own WMI data-block API: reaches a firmware block by its GUID, whether or not a class names it.
+        [DllImport("advapi32.dll")]
+        public static extern int WmiOpenBlock(ref Guid guid, int desiredAccess, out IntPtr dataBlock);
+
+        [DllImport("advapi32.dll")]
+        public static extern int WmiQueryAllDataW(IntPtr dataBlock, ref int bufferSize, IntPtr buffer);
+
+        [DllImport("advapi32.dll")]
+        public static extern int WmiCloseBlock(IntPtr dataBlock);
 
         [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
         public static extern ServiceControlHandle OpenSCManager(string machine, string database, uint access);

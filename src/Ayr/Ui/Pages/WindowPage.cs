@@ -26,6 +26,9 @@ namespace Ayr.Ui.Pages
         /// <summary>Every control that changes something; they are disabled while a change is being applied.</summary>
         public abstract IEnumerable<Control> Inputs { get; }
 
+        /// <summary>The page works through MSI's firmware, so on a laptop Ayr can't control yet its inputs are disabled.</summary>
+        public virtual bool NeedsFirmware => false;
+
         protected Theme Theme { get; }
         protected IPageHost Host { get; }
 

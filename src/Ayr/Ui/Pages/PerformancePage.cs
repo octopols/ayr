@@ -93,6 +93,8 @@ namespace Ayr.Ui.Pages
 
         public override string Title => "Performance";
 
+        public override bool NeedsFirmware => true;
+
         public override IEnumerable<Control> Inputs =>
             new Control[] { _performance, _fan, _editCurve, _coreOffset, _memoryOffset, _applyOverclock };
 
@@ -236,7 +238,7 @@ namespace Ayr.Ui.Pages
 
         private void OpenCurveEditor()
         {
-            if (_slow == null)
+            if (_slow?.CurveTemperatures == null)
             {
                 return;
             }

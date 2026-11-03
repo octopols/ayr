@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Ayr.App;
 using Ayr.Controllers;
+using Ayr.Hardware;
 using Ayr.Ui.Controls;
 
 namespace Ayr.Ui
@@ -125,6 +126,13 @@ namespace Ayr.Ui
         {
             _backend.Run(this, _backend.ReadLive, (live, error) =>
             {
+                if (error is UnsupportedFirmwareException)
+                {
+                    _status.Text = "Laptop not supported yet. Open Ayr to help.";
+                    _performance.Enabled = false;
+                    _fan.Enabled = false;
+                    return;
+                }
                 if (error != null)
                 {
                     _status.Text = "Can't read fans and performance. Open Ayr for details.";
