@@ -82,6 +82,8 @@ namespace Ayr.Ui.Pages
 
         public override string Title => "Game mode";
 
+        public override bool NeedsFirmware => true;
+
         public override IEnumerable<Control> Inputs =>
             new Control[] { _toggle, _performance, _fan, _overclock, _useHighest, _scan, _add }.Concat(_rows);
 

@@ -21,6 +21,9 @@ namespace Ayr.Diagnostics
 
         public void Run()
         {
+            _output.WriteLine("=== Firmware (read-only) ===");
+            _output.WriteLine("  generation: " + FirmwareBlocks.Generation);
+            _output.WriteLine();
             WriteEcRegisters();
             _output.WriteLine();
             WriteWmiBlocks();
@@ -54,6 +57,10 @@ namespace Ayr.Diagnostics
                 {
                     byte[] values = _hardware.Wmi.ReadBlock(block);
                     _output.WriteLine("  {0,-19} [{1,2}] {2}", block, values.Length, string.Join(",", values));
+                }
+                catch (UnsupportedFirmwareException)
+                {
+                    _output.WriteLine("  {0,-19} not supported by this firmware", block);
                 }
                 catch (Exception ex)
                 {

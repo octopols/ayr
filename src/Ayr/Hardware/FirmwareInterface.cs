@@ -16,16 +16,30 @@ namespace Ayr.Hardware
         private const string MofImagePath = "MofImagePath";
         private const string ProbeClass = "root\\WMI:MSI_System";
 
-        /// <summary>Registers Ayr's copy of msiapcfg.dll when the classes are missing; Windows loads it at the next restart.</summary>
+        /// <summary>
+        /// Registers Ayr's copy of msiapcfg.dll when the classes are missing; Windows loads it at the next restart. Newer
+        /// firmware has none of the blocks the classes describe, so there it registers nothing and undoes a registration
+        /// of its own, instead of asking for a restart that can't help.
+        /// </summary>
         public static FirmwareInterfaceState EnsureRegistered()
         {
+            bool newerFirmware = FirmwareBlocks.Generation == FirmwareGeneration.Newer;
             if (ClassesExist())
             {
-                return FirmwareInterfaceState.Ready;
+                if (!newerFirmware)
+                {
+                    return FirmwareInterfaceState.Ready;
+                }
+                RemoveIfOwned();
+                return FirmwareInterfaceState.NewerFirmware;
             }
             if (!MachineIdentity.IsMsi)
             {
                 return FirmwareInterfaceState.NotAnMsiLaptop;
+            }
+            if (newerFirmware)
+            {
+                return FirmwareInterfaceState.NewerFirmware;
             }
             string definitionsPath = VendorLibrary.FirmwareInterface.Locate();
             using (RegistryKey wmiAcpi = OpenWmiAcpiKey())

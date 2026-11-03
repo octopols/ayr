@@ -61,6 +61,10 @@ namespace Ayr.Hardware
             {
                 throw MissingFirmwareInterface(block, ex);
             }
+            catch (ManagementException ex) when (ex.ErrorCode == ManagementStatus.NotSupported)
+            {
+                throw new UnsupportedFirmwareException(ex);
+            }
             if (instances.Length == 0)
             {
                 throw MissingFirmwareInterface(block, null);
@@ -69,8 +73,10 @@ namespace Ayr.Hardware
         }
 
         private static InvalidOperationException MissingFirmwareInterface(WmiBlock block, Exception cause) =>
-            new InvalidOperationException("MSI's firmware interface (" + block + ") isn't available. Start the Ayr tray app once to "
-                + "set it up, then restart Windows. Ayr only works on MSI laptops.", cause);
+            FirmwareBlocks.Generation == FirmwareGeneration.Newer
+                ? new UnsupportedFirmwareException(cause)
+                : new InvalidOperationException("MSI's firmware interface (" + block + ") isn't available. Start the Ayr tray app once "
+                    + "to set it up, then restart Windows. Ayr only works on MSI laptops.", cause);
 
         private static byte ReadPayload(ManagementObject instance) =>
             (byte)(Convert.ToInt32(instance[PayloadProperty(instance)], CultureInfo.InvariantCulture) & 0xFF);

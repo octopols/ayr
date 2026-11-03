@@ -132,7 +132,9 @@ namespace Ayr.Ui
                 if (error != null)
                 {
                     ActivityLog.Write("Fn+" + key + " failed: " + ExceptionText.Of(error));
-                    ShowWarning("Fn+" + key + " couldn't change the setting. Open Ayr to try again.");
+                    ShowWarning(error is UnsupportedFirmwareException
+                        ? "Fn+" + key + " can't change settings on this laptop yet. Open Ayr to help add support."
+                        : "Fn+" + key + " couldn't change the setting. Open Ayr to try again.");
                 }
             });
 

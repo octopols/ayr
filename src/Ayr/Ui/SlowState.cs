@@ -30,6 +30,8 @@ namespace Ayr.Ui
         }
 
         public DesiredState Desired { get; }
+
+        /// <summary>Null on firmware Ayr can't control yet.</summary>
         public CurveTemperatures CurveTemperatures { get; }
 
         /// <summary>The battery's current limit; null when EC RAM can't be reached.</summary>

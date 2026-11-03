@@ -96,7 +96,7 @@ namespace Ayr.Ui
             BatteryReading battery = ReadBattery();
             return new SlowState(
                 desired,
-                new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu)),
+                ReadCurveTemperatures(),
                 ReadIfAvailable(() => _hardware.ChargeLimit.IsSupported, _hardware.ChargeLimit.ReadPercent),
                 _games.Overview(),
                 _charger.ConnectedStatuses(),
@@ -312,6 +312,19 @@ namespace Ayr.Ui
                 return BatteryHealth.Read(_hardware.Wmi);
             }
             catch (Exception ex) when (BatteryHealth.IsReadFailure(ex))
+            {
+                return null;
+            }
+        }
+
+        // On firmware Ayr can't control the fan pages are disabled, and the rest of the window still needs its refresh.
+        private CurveTemperatures ReadCurveTemperatures()
+        {
+            try
+            {
+                return new CurveTemperatures(_hardware.Fans.ReadPointTemperatures(FanKind.Cpu), _hardware.Fans.ReadPointTemperatures(FanKind.Gpu));
+            }
+            catch (UnsupportedFirmwareException)
             {
                 return null;
             }

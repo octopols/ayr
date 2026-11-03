@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
@@ -27,6 +28,9 @@ namespace Ayr.Ui
         private const string MsiSoftwareNotice = "MSI software is still installed and can undo your settings.";
         private const string MsiSoftwareAction = "Review";
         private const string ReadFailed = "Ayr can't reach the laptop's fan and power controls. Restart Windows, then open Ayr again.";
+        private const string UnsupportedNotice =
+            "Ayr can't control this laptop's fans, performance, battery or keyboard yet. Newer MSI laptops need new code, and you can help add it on GitHub.";
+        private const string UnsupportedAction = "Help add support";
         private const string SettingsReadFailed = "Couldn't read your settings, so this page may be out of date. Restart Ayr if it keeps happening.";
         private static readonly TimeSpan LiveInterval = TimeSpan.FromSeconds(2);
         private static readonly TimeSpan SlowInterval = TimeSpan.FromSeconds(15);
@@ -53,10 +57,10 @@ namespace Ayr.Ui
         private string _applyError;
         private string _readError;
         private string _settingsReadError;
+        private bool _firmwareUnsupported;
         private bool _msiCenterRunning;
         private int _msiItemsFound;
-        private string _bannerText;
-        private string _bannerAction;
+        private BannerNotice _notice;
 
         public MainWindow(UiBackend backend)
         {
@@ -107,7 +111,7 @@ namespace Ayr.Ui
             };
 
             _banner = new NoticeBar(Theme) { Visible = false };
-            _banner.ActionClicked += () => ShowPage(_msiPage);
+            _banner.ActionClicked += () => _notice?.Act();
 
             Controls.Add(_banner);
             Controls.Add(_sidebarEdge);
@@ -214,18 +218,24 @@ namespace Ayr.Ui
         private void SetBusy(bool busy)
         {
             _busy = busy;
+            EnableInputs();
+            UseWaitCursor = busy;
+        }
+
+        private void EnableInputs()
+        {
             foreach (WindowPage page in _pages)
             {
+                bool enabled = !_busy && !(_firmwareUnsupported && page.NeedsFirmware);
                 foreach (Control input in page.Inputs)
                 {
-                    input.Enabled = !busy;
+                    input.Enabled = enabled;
                 }
-                if (!busy)
+                if (enabled)
                 {
                     page.InputsReleased();
                 }
             }
-            UseWaitCursor = busy;
         }
 
         // Every change says what it did, for a few seconds, in a spot where it never moves the page around.
@@ -236,21 +246,51 @@ namespace Ayr.Ui
             _confirmationTimer.Start();
         }
 
-        // One line above the page: a failed change matters most, then unreadable hardware, then MSI software still installed.
         private void UpdateBanner()
         {
-            string error = _applyError ?? _readError ?? _settingsReadError;
-            bool msiInstalled = (_msiItemsFound > 0 || _msiCenterRunning) && _currentPage != _msiPage;
-            string text = error ?? (msiInstalled ? MsiSoftwareNotice : null);
-            string action = error == null && msiInstalled ? MsiSoftwareAction : null;
-            if (text == _bannerText && action == _bannerAction)
+            BannerNotice notice = CurrentNotice();
+            if (BannerNotice.SameMessage(notice, _notice))
             {
                 return;
             }
-            _bannerText = text;
-            _bannerAction = action;
-            _banner.SetMessage(text ?? "", action);
+            _notice = notice;
+            _banner.SetMessage(notice?.Text ?? "", notice?.ActionLabel);
             Relayout();
+        }
+
+        // On a laptop Ayr can't control yet, its firmware pages explain why they're disabled, and the other pages, which
+        // work, don't repeat a hardware error that a restart can't fix.
+        private BannerNotice CurrentNotice()
+        {
+            if (_firmwareUnsupported && _currentPage.NeedsFirmware)
+            {
+                return new BannerNotice(UnsupportedNotice, UnsupportedAction, OpenModelReport);
+            }
+            string readError = _firmwareUnsupported ? null : _readError;
+            string error = _applyError ?? readError ?? _settingsReadError;
+            if (error != null)
+            {
+                return new BannerNotice(error);
+            }
+            bool msiInstalled = (_msiItemsFound > 0 || _msiCenterRunning) && _currentPage != _msiPage;
+            return msiInstalled ? new BannerNotice(MsiSoftwareNotice, MsiSoftwareAction, () => ShowPage(_msiPage)) : null;
+        }
+
+        private static void OpenModelReport() => Process.Start("explorer.exe", "\"" + ProjectLinks.ModelReport + "\"")?.Dispose();
+
+        // Unsupported firmware fails every read the same way, so it is logged once rather than on every refresh.
+        private void NoteReadFailure(string what, Exception error)
+        {
+            if (error == null || _firmwareUnsupported)
+            {
+                return;
+            }
+            ActivityLog.Write(what + " failed: " + ExceptionText.Of(error));
+            if (error is UnsupportedFirmwareException)
+            {
+                _firmwareUnsupported = true;
+                EnableInputs();
+            }
         }
 
         private void RefreshLive()
@@ -263,10 +303,7 @@ namespace Ayr.Ui
             Backend.Run(this, Backend.ReadLive, (live, error) =>
             {
                 _liveInFlight = false;
-                if (error != null)
-                {
-                    ActivityLog.Write("reading the hardware failed: " + ExceptionText.Of(error));
-                }
+                NoteReadFailure("reading the hardware", error);
                 _readError = error == null ? null : ReadFailed;
                 UpdateBanner();
                 if (error == null)
@@ -286,10 +323,10 @@ namespace Ayr.Ui
             Backend.Run(this, () => Backend.ReadSlow(includeAutostart), (slow, error) =>
             {
                 _slowInFlight = false;
+                NoteReadFailure("reading settings", error);
                 _settingsReadError = error == null ? null : SettingsReadFailed;
                 if (error != null)
                 {
-                    ActivityLog.Write("reading settings failed: " + ExceptionText.Of(error));
                     UpdateBanner();
                     return;
                 }
@@ -337,7 +374,7 @@ namespace Ayr.Ui
             int pageLeft = 2 + sidebarWidth;
             int pageWidth = width - sidebarWidth - 1;
             int pageTop = bodyTop;
-            bool bannerShown = _bannerText != null;
+            bool bannerShown = _notice != null;
             _banner.Visible = bannerShown;
             if (bannerShown)
             {

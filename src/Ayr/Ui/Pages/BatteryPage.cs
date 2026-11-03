@@ -79,6 +79,8 @@ namespace Ayr.Ui.Pages
 
         public override string Title => "Battery";
 
+        public override bool NeedsFirmware => true;
+
         public override IEnumerable<Control> Inputs => new Control[] { _charge, _chargeSlider, _calibrate };
 
         public override void ShowSlow(SlowState slow)

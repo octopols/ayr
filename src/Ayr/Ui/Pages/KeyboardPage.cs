@@ -49,6 +49,8 @@ namespace Ayr.Ui.Pages
 
         public override string Title => "Keyboard";
 
+        public override bool NeedsFirmware => true;
+
         public override IEnumerable<Control> Inputs => new Control[] { _light }.Concat(_keyChoices.Values);
 
         public override void ShowLive(LiveState live)

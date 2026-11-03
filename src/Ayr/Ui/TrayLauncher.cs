@@ -89,11 +89,12 @@ namespace Ayr.Ui
                     return;
                 }
                 UpdateInstaller.RemoveLeftovers();
-                if (!FirmwareInterfaceReady())
+                FirmwareInterfaceState firmware = FirmwareInterface.EnsureRegistered();
+                if (!CanStartTray(firmware))
                 {
                     return;
                 }
-                if (restoreSettings)
+                if (restoreSettings && firmware == FirmwareInterfaceState.Ready)
                 {
                     new StartupApplier(new HardwareContext()).ApplyOrFailsafe();
                 }
@@ -101,11 +102,14 @@ namespace Ayr.Ui
             }
         }
 
-        private static bool FirmwareInterfaceReady()
+        // On newer firmware the tray still runs: iPhone fast charge and MSI software removal don't need the firmware, and
+        // the window says what doesn't work yet.
+        private static bool CanStartTray(FirmwareInterfaceState firmware)
         {
-            switch (FirmwareInterface.EnsureRegistered())
+            switch (firmware)
             {
                 case FirmwareInterfaceState.Ready:
+                case FirmwareInterfaceState.NewerFirmware:
                     return true;
                 case FirmwareInterfaceState.RestartRequired:
                     ShowMessage("Ayr has installed MSI's firmware interface. Restart Windows to finish setting it up.", MessageBoxIcon.Information);
