@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 (2026-11-04)
+
+- **Newer MSI laptops (11th-gen Intel and later) are told clearly that they aren't supported yet**, instead of seeing a
+  raw Windows error and being asked to restart. Ayr recognises them before setting anything up, so there is no wasted
+  restart, and removes a setup it made on them earlier.
+- On those laptops the tray still runs, so iPhone & iPad fast charge and MSI software removal work. The pages that
+  can't work are disabled, with a "Help add support" button that opens the GitHub model report form.
+- `ayrctl probe` shows the firmware generation, and the CLI says to run it and where to share the output.
+
 ## 0.8.0 (2026-11-02)
 
 - **Long jobs are safe:** automatic updates, "Check for updates" and Exit wait while a battery calibration or MSI
